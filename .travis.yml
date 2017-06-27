@@ -68,7 +68,7 @@ script:
     - mkdir build && cd build
 
     - if [ "$FLAVOR" == "cs" ]; then cmake -DBOND_SKIP_GBC_TESTS=TRUE -DBOND_SKIP_CORE_TESTS=TRUE -DBOND_ENABLE_COMM=FALSE -DBOND_ENABLE_GRPC=FALSE ..; fi
-    - if [ "$FLAVOR" == "cs" ]; then make gbc DESTDIR=$HOME install; fi
+    - if [ "$FLAVOR" == "cs" ]; then make DESTDIR=$HOME install; fi
     - if [ "$FLAVOR" == "cs" ]; then cd ..; fi
     - if [ "$FLAVOR" == "cs" ]; then export BOND_COMPILER_PATH=$HOME/usr/local/bin; fi
     - if [ "$FLAVOR" == "cs" ]; then xbuild /p:Configuration=Debug cs/cs.sln; fi
