@@ -1,47 +1,59 @@
+# fsharp feature branch
+-
+    version: 1.0.{build}
+    clone_depth: 15
+    branches:
+        only:
+            - fsharp
+    configuration: Debug
+    build:
+        project: fsharp\fsharp.sln
+        verbosity: minimal
+    test:
+        assemblies: fsharp\test\TypeProvider\bin\$(configuration)\BondFsharpUnitTest.dll
+
+# other branches
 -
     version: 1.0.{build}
     clone_depth: 15
 
     environment:
+        global:
+            STACK_ROOT: "c:\\sr"
+        BOND_TOKEN:
+            secure: MdnZ86SpR3+/fVz2u31blV83LH6juiobrvO/l1Ak4zG7ykxtvfUI/Vd4l7etYB4J
+        # The slowest configurations should come first to help reduce
+        # overall completion time since we run multiple configurations in
+        # parallel.
         matrix:
-            - MATRIX_ENV: "first-flavor"
-            - MATRIX_ENV: "second-flavor"
-
+            - BOND_BUILD: C++
+              BOND_VS: "Visual Studio 14 2015"
+              BOND_VS_NUM: 14
+              BOND_ARCH: 64
+              BOND_BOOST: 60
+              BOND_CMAKE_FLAGS: "-DBOND_ENABLE_GRPC=FALSE;-DBOND_SKIP_CORE_TESTS=TRUE;-DBOND_SKIP_GBC_TESTS=TRUE"
+            - BOND_BUILD: C#
+              BOND_OUTPUT: Properties
+              BOND_CONFIG: Debug
+            - BOND_BUILD: "C# .NET Core"
+              BOND_CONFIG: Debug
+            - BOND_BUILD: Doc
     install:
         - ps: >-
-            $ps_var = 'install'
+            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\010-install.ps1"
 
-            $env:env_var = 'install'
-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
+    cache:
+        - cs\packages -> cs\test\core\packages.config
+        - "c:\\sr"
 
     before_build:
         - ps: >-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
-
-            $ps_var = 'bb'
-
-            $env:env_var = 'bb'
-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
-
+            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\020-before_build.ps1"
 
     build_script:
         - ps: >-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
-
-            $ps_var = 'bs'
-
-            $env:env_var = 'bs'
-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
+            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\030-build_script.ps1"
 
     test_script:
         - ps: >-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
-
-            $ps_var = 'ts'
-
-            $env:env_var = 'ts'
-
-            Write-Host "%MATRIX_ENV%: $($env:MATRIX_ENV); ps_var: $ps_var; env_var $($env:env_var)"
+            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\040-test_script.ps1"
