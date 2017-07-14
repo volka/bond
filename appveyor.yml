@@ -40,7 +40,7 @@
             - BOND_BUILD: Doc
     install:
         - ps: >-
-            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\010-install.ps1"
+            & "$env:APPVEYOR_BUILD_FOLDER\.appveyor\010-install.ps1"
 
     cache:
         - cs\packages -> cs\test\core\packages.config
@@ -48,12 +48,12 @@
 
     before_build:
         - ps: >-
-            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\020-before_build.ps1"
+            & "$env:APPVEYOR_BUILD_FOLDER\.appveyor\020-before_build.ps1"
 
     build_script:
         - ps: >-
-            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\030-build_script.ps1"
+            & "$env:APPVEYOR_BUILD_FOLDER\.appveyor\030-build_script.ps1"
 
     test_script:
         - ps: >-
-            & "$(env:APPVEYOR_BUILD_FOLDER)\.appveyor\040-test_script.ps1"
+            & "$env:APPVEYOR_BUILD_FOLDER\.appveyor\040-test_script.ps1"
