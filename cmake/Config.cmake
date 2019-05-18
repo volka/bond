@@ -1,5 +1,9 @@
 include (Compiler)
 
+if (POLICY CMP0074)
+    cmake_policy(SET CMP0074 NEW)
+endif()
+
 set (BOND_GBC_PATH_DESCRIPTION
      "Optional path to the gbc executable to use. If set, this gbc will be used when generating code from .bond files. If not set, then gbc will be built (and the Haskell toolchain will need to be present on the machine) and the gbc tests will be run.")
 
@@ -180,8 +184,16 @@ cxx_add_compile_options(GNU
 include_directories (
     ${BOND_INCLUDE}
     ${BOND_GENERATED}
-    ${Boost_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rapidjson/include)
+    ${Boost_INCLUDE_DIRS})
+
+if (BOND_FIND_RAPIDJSON)
+    find_package(RapidJSON REQUIRED)
+    include_directories (
+        ${RapidJSON_INCLUDE_DIRS})
+else()
+    include_directories (
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rapidjson/include)
+endif()
 
 set (BOND_LIBRARIES_ONLY
     "FALSE"
