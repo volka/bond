@@ -158,6 +158,16 @@ private:
         return GetValue()->IsArray() ? GetValue()->Size() : 0;
     }
 
+    bool IsString() const
+    {
+        return GetValue()->IsString();
+    }
+
+    std::string GetString() const
+    {
+        return std::string(GetValue()->GetString(), GetValue()->GetStringLength());
+    }
+
     const rapidjson::Value* GetValue() const
     {
         BOOST_ASSERT(_value);

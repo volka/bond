@@ -104,11 +104,11 @@ namespace Bond.Protocols
 
         public void WriteBytes(ArraySegment<byte> data)
         {
-            var end = data.Offset + data.Count;
-            for (var i = data.Offset; i != end; ++i)
-            {
-                writer.WriteValue((sbyte) data.Array[i]);
-            }
+            // Encode bytes as base64 string instead of array of byte values
+            var bytes = new byte[data.Count];
+            Array.Copy(data.Array, data.Offset, bytes, 0, data.Count);
+            string base64String = Convert.ToBase64String(bytes);
+            writer.WriteValue(base64String);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

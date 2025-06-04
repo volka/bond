@@ -19,10 +19,20 @@ different versioning scheme, following the Haskell community's
 
 ### C++ ###
 
+* **JSON Protocol**: Binary data (blob) is now encoded as base64 strings instead of byte arrays in JSON output, reducing size by ~80% and improving readability. Backward compatibility is maintained for reading legacy byte array format.
+* Added `EncodeBase64()` and `DecodeBase64()` utility functions to `bond/protocol/encoding.h`.
 * gRPC v1.17.1 is now required to use Bond-over-gRPC.
 * Fixed an ambigious `HexDigit` overload compilation error when
   compiling with some versions of GCC. ([Pull request
   #954](https://github.com/microsoft/bond/pull/954))
+
+### C# ###
+
+* **JSON Protocol**: Binary data (blob) is now encoded as base64 strings instead of byte arrays in JSON output, reducing size by ~80% and improving readability. Backward compatibility is maintained for reading legacy byte array format.
+
+### Java ###
+
+* **JSON Protocol**: Binary data (blob) is now encoded as base64 strings instead of byte arrays in JSON output, reducing size by ~80% and improving readability. Backward compatibility is maintained for reading legacy byte array format.
 
 ## 8.1.0: 2019-03-27 ##
 
