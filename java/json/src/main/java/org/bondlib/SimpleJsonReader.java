@@ -12,6 +12,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.util.Stack;
 
 /**
  * Implements Simple JSON protocol reader for object deserialization.
@@ -27,10 +28,18 @@ public final class SimpleJsonReader implements TextProtocolReader {
     // the latter purpose)
     private boolean hasPeekedParserForNextToken;
 
+    // Stack to track container types: true for maps (objects), false for lists/sets (arrays)
+    private final Stack<Boolean> containerTypeStack;
+
+    // Track if we're expecting a map key (field name) next
+    private boolean expectingMapKey;
+
     public SimpleJsonReader(InputStream inputStream) throws IOException {
         ArgumentHelper.ensureNotNull(inputStream, "inputStream");
         this.parser = JsonGlobals.jsonFactory.createParser(inputStream);
         this.hasPeekedParserForNextToken = false;
+        this.containerTypeStack = new Stack<Boolean>();
+        this.expectingMapKey = false;
     }
 
     @Override
@@ -76,13 +85,22 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final void readContainerBegin() throws IOException {
-        // skip a START_ARRAY token that is expected here
+        // Handle both arrays and objects (for maps)
         final JsonToken currentToken = this.advanceParserToNextToken();
-        if (currentToken != JsonToken.START_ARRAY) {
+        if (currentToken == JsonToken.START_ARRAY) {
+            // Reading a list/set
+            containerTypeStack.push(false); // false = array
+            expectingMapKey = false;
+        } else if (currentToken == JsonToken.START_OBJECT) {
+            // Reading a map
+            containerTypeStack.push(true); // true = object/map
+            expectingMapKey = true;
+        } else {
             throw createInvalidBondDataException(
-                    "Current JSON token is '%s' where '%s' is expected.",
+                    "Current JSON token is '%s' where '%s' or '%s' is expected.",
                     currentToken,
-                    JsonToken.START_ARRAY);
+                    JsonToken.START_ARRAY,
+                    JsonToken.START_OBJECT);
         }
     }
 
@@ -90,14 +108,26 @@ public final class SimpleJsonReader implements TextProtocolReader {
     public final void readContainerEnd() throws IOException {
         // need to clear the peek flag to make sure nested collections work properly
         //
-        // note that this amounts to skipping a END_ARRAY token which is expected to
+        // note that this amounts to skipping a END_ARRAY or END_OBJECT token which is expected to
         // be the current (peeked) token when this method is entered
         this.hasPeekedParserForNextToken = false;
+        
+        // Pop the container type from the stack
+        if (!containerTypeStack.isEmpty()) {
+            containerTypeStack.pop();
+        }
+        
+        // Reset expectingMapKey based on the parent container
+        if (!containerTypeStack.isEmpty() && containerTypeStack.peek()) {
+            expectingMapKey = true; // Parent is a map, so we expect a key next
+        } else {
+            expectingMapKey = false;
+        }
     }
 
     @Override
     public final boolean readContainerItemBegin() throws IOException {
-        // peek the next token to see whether it is end of an array
+        // peek the next token to see whether it is end of an array or object
         //
         // note that this is the only place where peekParserForNextToken is called and since clients
         // of TextProtocolReader should call either readXXX (some value) or readContainerEnd between
@@ -109,16 +139,186 @@ public final class SimpleJsonReader implements TextProtocolReader {
         // which will check whether the token is null, and thus EOF will be detected when reading
         // a value
         final JsonToken nextToken = this.peekParserForNextToken();
-        return nextToken != JsonToken.END_ARRAY;
+        
+        // Check if we're in a map (object) or array
+        if (!containerTypeStack.isEmpty() && containerTypeStack.peek()) {
+            // We're in a map (object)
+            if (nextToken == JsonToken.END_OBJECT) {
+                return false; // No more items
+            } else if (nextToken == JsonToken.FIELD_NAME) {
+                expectingMapKey = true;
+                return true; // More items available
+            } else {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' or '%s' is expected in map.",
+                        nextToken,
+                        JsonToken.FIELD_NAME,
+                        JsonToken.END_OBJECT);
+            }
+        } else {
+            // We're in an array
+            return nextToken != JsonToken.END_ARRAY;
+        }
     }
 
     @Override
     public final void readContainerItemEnd() throws IOException {
-        // nothing to do here
+        // For maps, toggle between expecting key and value
+        if (!containerTypeStack.isEmpty() && containerTypeStack.peek()) {
+            // We're in a map
+            expectingMapKey = !expectingMapKey;
+        }
+    }
+
+    // Helper methods to convert string keys back to their original types
+    private byte convertStringToInt8(String str) throws IOException {
+        try {
+            int value = Integer.parseInt(str);
+            if (value >= Byte.MIN_VALUE && value <= Byte.MAX_VALUE) {
+                return (byte) value;
+            } else {
+                throw createInvalidBondDataException(
+                        "String key value '%s' is outside of bounds for Bond data type 'int8'.", str);
+            }
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'int8'.", str);
+        }
+    }
+
+    private short convertStringToInt16(String str) throws IOException {
+        try {
+            int value = Integer.parseInt(str);
+            if (value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) {
+                return (short) value;
+            } else {
+                throw createInvalidBondDataException(
+                        "String key value '%s' is outside of bounds for Bond data type 'int16'.", str);
+            }
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'int16'.", str);
+        }
+    }
+
+    private int convertStringToInt32(String str) throws IOException {
+        try {
+            return Integer.parseInt(str);
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'int32'.", str);
+        }
+    }
+
+    private long convertStringToInt64(String str) throws IOException {
+        try {
+            return Long.parseLong(str);
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'int64'.", str);
+        }
+    }
+
+    private byte convertStringToUInt8(String str) throws IOException {
+        try {
+            int value = Integer.parseInt(str);
+            if (value >= 0 && value <= 255) {
+                return (byte) value;
+            } else {
+                throw createInvalidBondDataException(
+                        "String key value '%s' is outside of bounds for Bond data type 'uint8'.", str);
+            }
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'uint8'.", str);
+        }
+    }
+
+    private short convertStringToUInt16(String str) throws IOException {
+        try {
+            int value = Integer.parseInt(str);
+            if (value >= 0 && value <= 65535) {
+                return (short) value;
+            } else {
+                throw createInvalidBondDataException(
+                        "String key value '%s' is outside of bounds for Bond data type 'uint16'.", str);
+            }
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'uint16'.", str);
+        }
+    }
+
+    private int convertStringToUInt32(String str) throws IOException {
+        try {
+            long value = Long.parseLong(str);
+            if (value >= 0 && value <= 4294967295L) {
+                return (int) value;
+            } else {
+                throw createInvalidBondDataException(
+                        "String key value '%s' is outside of bounds for Bond data type 'uint32'.", str);
+            }
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'uint32'.", str);
+        }
+    }
+
+    private long convertStringToUInt64(String str) throws IOException {
+        try {
+            return Long.parseUnsignedLong(str);
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'uint64'.", str);
+        }
+    }
+
+    private float convertStringToFloat(String str) throws IOException {
+        try {
+            return Float.parseFloat(str);
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'float'.", str);
+        }
+    }
+
+    private double convertStringToDouble(String str) throws IOException {
+        try {
+            return Double.parseDouble(str);
+        } catch (NumberFormatException e) {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'double'.", str);
+        }
+    }
+
+    private boolean convertStringToBool(String str) throws IOException {
+        if ("true".equals(str)) {
+            return true;
+        } else if ("false".equals(str)) {
+            return false;
+        } else {
+            throw createInvalidBondDataException(
+                    "String key value '%s' cannot be converted to Bond data type 'bool'.", str);
+        }
     }
 
     @Override
     public final byte readInt8() throws IOException {
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToInt8(keyStr);
+        }
+        
+        // Handle regular values
         final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
@@ -144,6 +344,21 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final short readInt16() throws IOException {
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToInt16(keyStr);
+        }
+        
+        // Handle regular values
         final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
@@ -169,13 +384,29 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final int readInt32() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToInt32(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'int32' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // an int32 value must be represented by INT (Jackson's minimal "optimal type")
         final JsonParser.NumberType numberType = this.parser.getNumberType();
         if (numberType == JsonParser.NumberType.INT) {
@@ -190,13 +421,29 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final long readInt64() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToInt64(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'int64' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // an int64 value must be represented by either LONG or INT (Jackson's "optimal types" for the value)
         final JsonParser.NumberType numberType = this.parser.getNumberType();
         if (numberType == JsonParser.NumberType.LONG || numberType == JsonParser.NumberType.INT) {
@@ -211,13 +458,29 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final byte readUInt8() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToUInt8(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'uint8' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // an uint8 value must be represented by INT (Jackson's minimal "optimal type") and be within bounds
         final JsonParser.NumberType numberType = this.parser.getNumberType();
         if (numberType == JsonParser.NumberType.INT) {
@@ -236,13 +499,29 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final short readUInt16() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToUInt16(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'uint16' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // an uint16 value must be represented by INT (Jackson's minimal "optimal type") and be within bounds
         final JsonParser.NumberType numberType = this.parser.getNumberType();
         if (numberType == JsonParser.NumberType.INT) {
@@ -261,13 +540,29 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final int readUInt32() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToUInt32(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'uint32' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // an uint32 value must be represented by either INT or LONG and be within respectable bounds
         final JsonParser.NumberType numberType = this.parser.getNumberType();
         if (numberType == JsonParser.NumberType.INT) {
@@ -292,13 +587,29 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final long readUInt64() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToUInt64(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'uint64' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // an uint64 value must be represented by either INT, LONG or BIG_INT and be within respectable bounds
         final JsonParser.NumberType numberType = this.parser.getNumberType();
         if (numberType == JsonParser.NumberType.INT) {
@@ -329,14 +640,30 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final float readFloat() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToFloat(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_FLOAT && currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where either '%s' or '%s' for Bond 'float' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_FLOAT,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // rely on Jackson to parse the current token as a float
         try {
             final float valueAsFloat = this.parser.getFloatValue();
@@ -351,14 +678,30 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final double readDouble() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToDouble(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken != JsonToken.VALUE_NUMBER_FLOAT && currentToken != JsonToken.VALUE_NUMBER_INT) {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where either '%s' or '%s' for Bond 'double' data type is expected.",
                     currentToken,
                     JsonToken.VALUE_NUMBER_FLOAT,
                     JsonToken.VALUE_NUMBER_INT);
-        }
+        
+    }
         // rely on Jackson to parse the current token as a double
         try {
             final double valueAsDouble = this.parser.getDoubleValue();
@@ -373,10 +716,26 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final boolean readBool() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return convertStringToBool(keyStr);
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken == JsonToken.VALUE_FALSE) {
             return false;
-        } else if (currentToken == JsonToken.VALUE_TRUE) {
+        
+    } else if (currentToken == JsonToken.VALUE_TRUE) {
             return true;
         } else {
             throw createInvalidBondDataException(
@@ -389,6 +748,21 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final String readString() throws IOException {
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return keyStr; // String keys don't need conversion
+        }
+        
+        // Handle regular values
         final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken == JsonToken.VALUE_STRING) {
             final String valueAsString = this.parser.getValueAsString();
@@ -403,11 +777,27 @@ public final class SimpleJsonReader implements TextProtocolReader {
 
     @Override
     public final String readWString() throws IOException {
-        final JsonToken currentToken = this.advanceParserToNextToken();
+        // Handle map keys (which are always strings in JSON)
+        if (expectingMapKey) {
+            final JsonToken currentToken = this.advanceParserToNextToken();
+            if (currentToken != JsonToken.FIELD_NAME) {
+                throw createInvalidBondDataException(
+                        "Current JSON token is '%s' where '%s' for map key is expected.",
+                        currentToken,
+                        JsonToken.FIELD_NAME);
+            }
+            String keyStr = this.parser.getText();
+            expectingMapKey = false;
+            return keyStr; // String keys don't need conversion
+        }
+        
+        // Handle regular values
+final JsonToken currentToken = this.advanceParserToNextToken();
         if (currentToken == JsonToken.VALUE_STRING) {
             final String valueAsString = this.parser.getValueAsString();
             return valueAsString;
-        } else {
+        
+    } else {
             throw createInvalidBondDataException(
                     "Current JSON token is '%s' where '%s' for Bond 'wstring' data type is expected.",
                     currentToken,

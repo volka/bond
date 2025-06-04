@@ -158,6 +158,16 @@ private:
         return GetValue()->IsArray() ? GetValue()->Size() : 0;
     }
 
+    rapidjson::Value::ConstMemberIterator ObjectBegin() const
+    {
+        return GetValue()->IsObject() ? GetValue()->MemberBegin() : rapidjson::Value::ConstMemberIterator();
+    }
+
+    rapidjson::Value::ConstMemberIterator ObjectEnd() const
+    {
+        return GetValue()->IsObject() ? GetValue()->MemberEnd() : rapidjson::Value::ConstMemberIterator();
+    }
+
     const rapidjson::Value* GetValue() const
     {
         BOOST_ASSERT(_value);

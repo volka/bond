@@ -6,6 +6,7 @@
 #include <bond/core/config.h>
 
 #include "simple_json_reader.h"
+#include <sstream>
 
 namespace bond
 {
@@ -133,17 +134,35 @@ DeserializeContainer(X& var, const T& element, SimpleJsonReader<Buffer>& reader)
     }
 }
 
+// Helper function to convert string keys back to their original types
+template <typename Key>
+bool ConvertStringToKey(const char* str, Key& key)
+{
+    return ConvertStringToKeyImpl(str, key, typename is_string<Key>::type());
+}
+
+template <typename Key>
+bool ConvertStringToKeyImpl(const char* str, Key& key, std::true_type)
+{
+    // Key is already a string type
+    key = str;
+    return true;
+}
+
+template <typename Key>
+bool ConvertStringToKeyImpl(const char* str, Key& key, std::false_type)
+{
+    // Key needs to be converted from string
+    std::istringstream iss(str);
+    return !(iss >> key).fail();
+}
+
 
 // deserialize map
 template <typename Protocols, typename X, typename T, typename Buffer>
 inline typename boost::enable_if<is_map_container<X> >::type
 DeserializeMap(X& var, BondDataType keyType, const T& element, SimpleJsonReader<Buffer>& reader)
 {
-    detail::JsonTypeMatching key_type(
-        get_type_id<typename element_type<X>::type::first_type>::value,
-        keyType,
-        std::is_enum<typename element_type<X>::type::first_type>::value);
-
     detail::JsonTypeMatching value_type(
         get_type_id<typename element_type<X>::type::second_type>::value,
         GetTypeId(element),
@@ -153,27 +172,18 @@ DeserializeMap(X& var, BondDataType keyType, const T& element, SimpleJsonReader<
 
     typename element_type<X>::type::first_type key(make_key(var));
 
-    for (rapidjson::Value::ConstValueIterator it = reader.ArrayBegin(), end = reader.ArrayEnd(); it != end; ++it)
+    // Iterate over JSON object members
+    for (rapidjson::Value::ConstMemberIterator it = reader.ObjectBegin(), end = reader.ObjectEnd(); it != end; ++it)
     {
-        if (key_type.BasicTypeMatch(*it))
-        {
-            detail::Read(*it, key);
-        }
-        else
+        // Convert string key back to the appropriate key type
+        if (!ConvertStringToKey(it->name.GetString(), key))
         {
             bond::InvalidKeyTypeException();
         }
 
-        ++it;
+        SimpleJsonReader<Buffer> input(reader, it->value);
 
-        if (it == end)
-        {
-            bond::ElementNotFoundException(key);
-        }
-
-        SimpleJsonReader<Buffer> input(reader, *it);
-
-        if (value_type.ComplexTypeMatch(*it))
+        if (value_type.ComplexTypeMatch(it->value))
             detail::MakeValue(input, element).template Deserialize<Protocols>(mapped_at(var, key));
         else
             value<typename element_type<X>::type::second_type, SimpleJsonReader<Buffer>&>(input).Deserialize(mapped_at(var, key));

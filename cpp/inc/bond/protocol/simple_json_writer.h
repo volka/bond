@@ -9,6 +9,7 @@
 #include "encoding.h"
 
 #include <bond/core/transforms.h>
+#include <sstream>
 
 namespace bond
 {
@@ -367,17 +368,17 @@ public:
     template <typename Key, typename T, typename Reader>
     void Container(const value<Key, Reader>& key, const T& value, uint32_t size) const
     {    
-        _output.WriteOpen('[');
+        _output.WriteOpen('{');
 
         while (size--)
         {
             _output.WriteSeparator();
-            Write(key);
+            WriteMapKeyFromValue(key);
             _output.WriteSeparator();
             Write(value);
         }
     
-        _output.WriteClose(']');
+        _output.WriteClose('}');
     }
 
 private:
@@ -440,15 +441,7 @@ private:
     typename boost::enable_if<is_container<T> >::type
     Write(const T& value) const
     {
-        _output.WriteOpen('[');
-
-        for (const_enumerator<T> elements(value); elements.more();)
-        {
-            _output.WriteSeparator();
-            Write(elements.next());
-        }
-
-        _output.WriteClose(']');
+        WriteContainer(value, typename is_map_container<T>::type());
     }
 
     // blob
@@ -481,6 +474,72 @@ private:
     Write(const value<T, Reader>& value) const
     {
         Apply<Protocols>(SerializeTo<Protocols>(_output), value);
+    }
+
+    // Helper methods for writing containers
+    template <typename T>
+    void WriteContainer(const T& value, std::false_type) const
+    {
+        // Non-map container (list, set, etc.)
+        _output.WriteOpen('[');
+
+        for (const_enumerator<T> elements(value); elements.more();)
+        {
+            _output.WriteSeparator();
+            Write(elements.next());
+        }
+
+        _output.WriteClose(']');
+    }
+
+    template <typename T>
+    void WriteContainer(const T& value, std::true_type) const
+    {
+        // Map container
+        _output.WriteOpen('{');
+
+        for (const_enumerator<T> elements(value); elements.more();)
+        {
+            const auto& pair = elements.next();
+            _output.WriteSeparator();
+            WriteMapKey(pair.first);
+            _output.WriteSeparator();
+            Write(pair.second);
+        }
+
+        _output.WriteClose('}');
+    }
+
+    // Helper method to write map keys as strings
+    template <typename Key>
+    void WriteMapKey(const Key& key) const
+    {
+        WriteMapKeyImpl(key, typename is_string<Key>::type());
+    }
+
+    template <typename Key>
+    void WriteMapKeyImpl(const Key& key, std::true_type) const
+    {
+        // Key is already a string type
+        _output.WriteName(key);
+    }
+
+    template <typename Key>
+    void WriteMapKeyImpl(const Key& key, std::false_type) const
+    {
+        // Key needs to be converted to string
+        std::ostringstream oss;
+        oss << key;
+        _output.WriteName(oss.str());
+    }
+
+    // Helper method to write map keys from value<Key, Reader>
+    template <typename Key, typename Reader>
+    void WriteMapKeyFromValue(const value<Key, Reader>& key) const
+    {
+        Key keyData;
+        key.template Deserialize<Protocols>(keyData);
+        WriteMapKey(keyData);
     }
 
 protected:
