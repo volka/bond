@@ -130,11 +130,9 @@ public final class SimpleJsonWriter implements ProtocolWriter {
 
     @Override
     public final void writeBytes(byte[] bytes) throws IOException {
-        this.generator.writeStartArray();
-        for (int i = 0; i < bytes.length; ++i) {
-            this.generator.writeNumber(bytes[i]);
-        }
-        this.generator.writeEndArray();
+        // Encode bytes as base64 string instead of array of byte values
+        String base64String = java.util.Base64.getEncoder().encodeToString(bytes);
+        this.generator.writeString(base64String);
     }
 
     @Override

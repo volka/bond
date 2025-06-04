@@ -415,6 +415,67 @@ public final class SimpleJsonReader implements TextProtocolReader {
         }
     }
 
+    public final byte[] readBytes(int count) throws IOException {
+        final JsonToken currentToken = this.advanceParserToNextToken();
+        if (currentToken == JsonToken.VALUE_STRING) {
+            // Handle base64 encoded binary data
+            final String base64String = this.parser.getValueAsString();
+            try {
+                return java.util.Base64.getDecoder().decode(base64String);
+            } catch (IllegalArgumentException e) {
+                throw createInvalidBondDataException(e,
+                        "Invalid base64 string for Bond 'blob' data type: '%s'", base64String);
+            }
+        } else if (currentToken == JsonToken.START_ARRAY) {
+            // Fallback: support legacy array format for backward compatibility
+            final byte[] result = new byte[count];
+            int index = 0;
+            while (index < count) {
+                final JsonToken itemToken = this.advanceParserToNextToken();
+                if (itemToken == JsonToken.END_ARRAY) {
+                    break;
+                } else if (itemToken == JsonToken.VALUE_NUMBER_INT) {
+                    final int value = this.parser.getValueAsInt();
+                    if (value < 0 || value > 255) {
+                        throw createInvalidBondDataException(
+                                "Byte value out of range [0, 255]: %d", value);
+                    }
+                    result[index++] = (byte) value;
+                } else {
+                    throw createInvalidBondDataException(
+                            "Current JSON token is '%s' where '%s' for Bond 'blob' array element is expected.",
+                            itemToken,
+                            JsonToken.VALUE_NUMBER_INT);
+                }
+            }
+            
+            // Consume the END_ARRAY token if we haven't already
+            if (this.parser.getCurrentToken() != JsonToken.END_ARRAY) {
+                final JsonToken endToken = this.advanceParserToNextToken();
+                if (endToken != JsonToken.END_ARRAY) {
+                    throw createInvalidBondDataException(
+                            "Current JSON token is '%s' where '%s' for end of Bond 'blob' array is expected.",
+                            endToken,
+                            JsonToken.END_ARRAY);
+                }
+            }
+            
+            // Return only the bytes we actually read
+            if (index < count) {
+                final byte[] trimmed = new byte[index];
+                System.arraycopy(result, 0, trimmed, 0, index);
+                return trimmed;
+            }
+            return result;
+        } else {
+            throw createInvalidBondDataException(
+                    "Current JSON token is '%s' where '%s' or '%s' for Bond 'blob' data type is expected.",
+                    currentToken,
+                    JsonToken.VALUE_STRING,
+                    JsonToken.START_ARRAY);
+        }
+    }
+
     @Override
     public void skip(BondDataType bondDataType) throws IOException {
         // no support for skipping (which is required for Bonded functionality)

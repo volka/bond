@@ -96,8 +96,22 @@ namespace Bond.Expressions.Json
 
         public override Expression Blob(Expression count)
         {
-            // null means that blobs will be handled as byte arrays
-            return null;
+            // Handle base64 encoded blobs as strings, with fallback to byte arrays
+            var readBase64String = Expression.Block(
+                Reader.Read(),
+                Expression.New(
+                    typeof(ArraySegment<byte>).GetConstructor(new[] { typeof(byte[]) }),
+                    Expression.Call(
+                        typeof(Convert).GetMethod("FromBase64String", new[] { typeof(string) }),
+                        Expression.Convert(Reader.Value, typeof(string)))));
+
+            return Expression.IfThenElse(
+                JsonTokenEquals(JsonToken.String),
+                readBase64String,
+                Expression.IfThenElse(
+                    JsonTokenEquals(JsonToken.StartArray),
+                    Expression.Constant(null), // Return null to fall back to byte-by-byte reading
+                    ThrowUnexpectedInput("Expected JSON string (base64) or array for blob.")));
         }
 
         public override Expression Scalar(Expression valueType, BondDataType expectedType, ValueHandler handler)

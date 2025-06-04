@@ -63,8 +63,26 @@ inline void DeserializeContainer(std::vector<bool, A>& var, const T& /*element*/
 template <typename Protocols, typename T, typename Buffer>
 inline void DeserializeContainer(blob& var, const T& /*element*/, SimpleJsonReader<Buffer>& reader)
 {
-    if (uint32_t size = reader.ArraySize())
+    // Handle base64 string encoding instead of array of byte values
+    if (reader.IsString())
     {
+        std::string base64String = reader.GetString();
+        std::vector<char> decoded = detail::DecodeBase64(base64String);
+        
+        if (!decoded.empty())
+        {
+            boost::shared_ptr<char[]> buffer = boost::make_shared_noinit<char[]>(decoded.size());
+            std::copy(decoded.begin(), decoded.end(), buffer.get());
+            var.assign(buffer, static_cast<uint32_t>(decoded.size()));
+        }
+        else
+        {
+            var.clear();
+        }
+    }
+    else if (uint32_t size = reader.ArraySize())
+    {
+        // Fallback: support legacy array format for backward compatibility
         boost::shared_ptr<char[]> buffer = boost::make_shared_noinit<char[]>(size);
         uint32_t i = 0;
 

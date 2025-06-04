@@ -454,15 +454,9 @@ private:
     // blob
     void Write(const blob& value) const
     {
-        _output.WriteOpen('[');
-
-        for (const char& ch : value)
-        {
-            _output.WriteSeparator();
-            _output.Write(static_cast<int8_t>(ch));
-        }
-
-        _output.WriteClose(']');
+        // Encode bytes as base64 string instead of array of byte values
+        std::string base64String = detail::EncodeBase64(value.content(), value.length());
+        _output.Write(base64String);
     }
 
     // serialized value
