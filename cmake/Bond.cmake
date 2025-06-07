@@ -53,17 +53,30 @@ function (add_bond_codegen)
             list(APPEND outputs "${outputDir}/${name}_grpc.h")
         endif()
     endforeach()
-    # if BOND_GBC_PATH is not set we must add a dependency on the "gbc" target to build it
-    if (NOT BOND_GBC_PATH)
-        set(gbc "gbc")
-    elseif()
-        set(gbc "")
+
+    set(effective_gbc_executable "${GBC_EXECUTABLE}") # Default to existing GBC_EXECUTABLE
+    set(gbc_dependency "gbc") # Default dependency on gbc target
+
+    if(DEFINED BOND_COMPILER_EXECUTABLE AND EXISTS "${BOND_COMPILER_EXECUTABLE}")
+        set(effective_gbc_executable "${BOND_COMPILER_EXECUTABLE}")
+        message(STATUS "Using Bond compiler (gbc) from Conan: ${effective_gbc_executable}")
+        # If GBC is provided by Conan, we don't depend on the local "gbc" CMake target from Haskell build
+        set(gbc_dependency "")
+    else()
+        message(STATUS "Using Bond compiler (gbc) from existing setup: ${effective_gbc_executable}")
+        # if BOND_GBC_PATH is not set we must add a dependency on the "gbc" target to build it
+        if (NOT BOND_GBC_PATH) # This logic seems related to a Haskell build of gbc within the project
+            set(gbc_dependency "gbc")
+        else()
+            set(gbc_dependency "") # If BOND_GBC_PATH is set, assume it's found, no specific "gbc" target dep
+        endif()
     endif()
+
     add_custom_command(
         OUTPUT ${outputs}
-        COMMAND ${GBC_EXECUTABLE} c++ ${options} ${inputs}
+        COMMAND ${effective_gbc_executable} c++ ${options} ${inputs}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS ${inputs} ${gbc} ${GBC_EXECUTABLE})
+        DEPENDS ${inputs} ${gbc_dependency} ${effective_gbc_executable})
     if (arg_TARGET)
         add_custom_target (${arg_TARGET}
             DEPENDS ${outputs}

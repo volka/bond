@@ -45,12 +45,59 @@ env:
     - FLAVOR="cpp-grpc" BOOST="1.61.0" COMPILER="gcc" CRON_ONLY="true"
 
     - FLAVOR="cpp-grpc-master" BOOST="1.66.0" COMPILER="clang" CRON_ONLY="true"
+
+    - FLAVOR="cpp-conan" COMPILER="clang" # Example: Clang, can add gcc later
 script:
     - if [ "$CRON_ONLY" = "true" ] && [ "$TRAVIS_EVENT_TYPE" != "cron" ] ; then echo "Skipping cron-only job"; exit 0; fi
-    - CI_BUILD_IMAGE=bondciimages.azurecr.io/ubuntu-1604:build-21070065
-    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then echo "Hardware:"; grep model\ name /proc/cpuinfo | uniq -c; free -m; fi
-    - time travis_retry docker pull $CI_BUILD_IMAGE
-    - docker images # Dump the image ID
-    - docker run -v $HOME/.ccache:/root/.ccache -v $HOME/.stack:/root/.stack -v `pwd`:/root/bond $CI_BUILD_IMAGE $HOME $FLAVOR $BOOST $COMPILER
+    - |
+      if [ "$FLAVOR" = "cpp-conan" ]; then
+        echo "Starting C++ Conan build..."
+        # Install Conan (Miniconda is a common way to get Python and pip)
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+        bash miniconda.sh -b -p $HOME/miniconda
+        export PATH="$HOME/miniconda/bin:$PATH"
+        hash -r
+        conda config --set always_yes yes --set changeps1 no
+        conda update -q conda
+        conda info -a # For debugging
+        conda install python=3.8 # Or a suitable Python version for Conan
+        pip install conan
+
+        # Install Haskell Stack (if not already available or cached effectively)
+        # Check if stack is available from cache; otherwise, install
+        if ! command -v stack &> /dev/null; then
+          echo "Stack not found, installing..."
+          curl -sSL https://get.haskellstack.org/ | sh
+          export PATH="$HOME/.local/bin:$PATH"
+        else
+          echo "Stack found, using existing."
+          export PATH="$HOME/.local/bin:$PATH" # Ensure it's in PATH
+        fi
+        stack --version
+
+        # Create default Conan profile
+        conan profile detect
+
+        # Navigate to the cpp directory and run Conan create
+        cd cpp
+        # Use conan create to build and run tests.
+        # Specify user/channel for consistency, though it's mostly for local cache here.
+        # The options are passed via -o package_name:option=value
+        conan create . --name=bond-cpp --version=0.13.2 --user=bond --channel=testing \
+            --build=missing \
+            -s compiler=$COMPILER \
+            -s compiler.libcxx=libstdc++11 \
+            -s build_type=Release \
+            -o bond-cpp:bond_enable_grpc=True # Example: gRPC enabled
+
+        echo "C++ Conan build and test completed."
+      else
+        # Existing docker-based build
+        CI_BUILD_IMAGE=bondciimages.azurecr.io/ubuntu-1604:build-21070065
+        if [ "$TRAVIS_OS_NAME" == "linux" ]; then echo "Hardware:"; grep model\ name /proc/cpuinfo | uniq -c; free -m; fi
+        time travis_retry docker pull $CI_BUILD_IMAGE
+        docker images # Dump the image ID
+        docker run -v $HOME/.ccache:/root/.ccache -v $HOME/.stack:/root/.stack -v $(pwd):/root/bond $CI_BUILD_IMAGE $HOME $FLAVOR $BOOST $COMPILER
+      fi
     # docker runs as root and may leave files in the following directories that are not readable by the travis user
-    - sudo chown -R travis:travis $HOME/.ccache $HOME/.stack `pwd`
+    - sudo chown -R travis:travis $HOME/.ccache $HOME/.stack $(pwd) $HOME/miniconda || true # Allow miniconda dir to fail if not created

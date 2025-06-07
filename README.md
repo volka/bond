@@ -45,6 +45,87 @@ If you already have RapidJSON and would like to build against it, add argument `
 
 If you do not wish to build the gRPC component, add argument `-DBOND_ENABLE_GRPC=FALSE` to the CMake invocation.
 
+## Building C++ with Conan
+
+This section describes how to build the Bond C++ libraries using [Conan](https://conan.io/) package manager.
+Conan manages dependencies and simplifies the build process, including the compilation of the Bond IDL compiler (gbc).
+
+### Prerequisites
+
+1.  **Install Conan**:
+    Follow the official Conan installation guide: [https://docs.conan.io/en/latest/installation.html](https://docs.conan.io/en/latest/installation.html)
+    A typical installation command is:
+    ```bash
+    pip install conan
+    ```
+    Ensure Conan is configured (e.g., default profile created):
+    ```bash
+    conan profile detect
+    ```
+
+2.  **Install Haskell Stack**:
+    The Bond IDL compiler (gbc) is written in Haskell and built using Stack.
+    Follow the official Stack installation guide: [https://docs.haskellstack.org/en/stable/install_and_upgrade/](https://docs.haskellstack.org/en/stable/install_and_upgrade/)
+
+### Building Bond C++
+
+The `conanfile.py` for Bond C++ is located in the `cpp/` directory.
+
+1.  **Install Dependencies and Generate Build Files**:
+    Navigate to the `cpp/` directory and run `conan install`. This command fetches dependencies and creates build files for CMake.
+    ```bash
+    cd cpp
+    conan install . --output-folder=build --build=missing -s build_type=Release
+    ```
+    *   `--output-folder=build`: Specifies the directory for build outputs.
+    *   `--build=missing`: Instructs Conan to build packages from source if pre-built binaries are not available for your configuration.
+    *   `-s build_type=Release`: Specifies the build type. Common options are `Release` and `Debug`.
+
+    To enable gRPC support:
+    ```bash
+    conan install . --output-folder=build --build=missing -s build_type=Release -o bond-cpp:bond_enable_grpc=True
+    ```
+
+2.  **Compile the Bond C++ Library**:
+    After `conan install` completes, you can compile the library using `conan build`:
+    ```bash
+    conan build . --build-folder=build
+    ```
+    Alternatively, you can navigate to the build directory (`cpp/build/`) and use CMake directly with the generated toolchain file:
+    ```bash
+    cd build
+    # Ensure you are in the correct build sub-directory (e.g., cpp/build/Release or cpp/build)
+    # The conan_toolchain.cmake path might vary based on your layout and Conan version.
+    # For Conan 1.x, it was often direct. For Conan 2.x with cmake_layout, it's more structured.
+    # The `conan install` output usually indicates the location of `conan_toolchain.cmake`.
+    # Assuming cmake_layout places it in a generators dir within the build folder:
+    cmake .. -DCMAKE_TOOLCHAIN_FILE=conan/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+    cmake --build .
+    cd .. # Return to cpp/
+    ```
+    The `conan build . --build-folder=build` command is generally simpler as it wraps these CMake calls.
+
+### Development and Packaging
+
+*   **Creating a Conan Package**:
+    If you want to create a Conan package for Bond C++ (e.g., for local testing or sharing):
+    ```bash
+    # From the cpp/ directory
+    conan create . --build=missing -s build_type=Release [options]
+    ```
+    This command will export the recipe, build it, run tests (if defined in `test()` method), and package it.
+
+*   **Editable Mode (for developers)**:
+    For local development, you can use Conan's editable mode to link your local source changes directly without re-packaging:
+    ```bash
+    # From the cpp/ directory
+    conan editable add . bond-cpp/0.13.2 --layout=cmake_layout
+    # Now, when other projects depend on bond-cpp/0.13.2, they will use your local sources.
+    # Build your project as usual (e.g., using conan build . or cmake).
+    # To remove:
+    conan editable remove bond-cpp/0.13.2
+    ```
+
 Following are specific instructions for building on various platforms.
 
 ### Linux

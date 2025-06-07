@@ -1,13 +1,28 @@
+# Add Conan package finding logic
+find_package(Boost REQUIRED CONFIG)
+find_package(RapidJSON REQUIRED CONFIG) # Assuming RapidJSON provides CMake config files
+
+if(BOND_ENABLE_GRPC)
+    find_package(gRPC CONFIG REQUIRED) # gRPC should provide CONFIG
+    set(grpc-flag GRPC)
+else()
+    set(grpc-flag "")
+endif()
+
+# Adjust schema paths
+if(DEFINED BOND_ROOT_DIR)
+  set(CORE_SCHEMAS_IDL_DIR "${BOND_ROOT_DIR}/idl/bond/core")
+else()
+  # Fallback or existing logic for BOND_IDL
+  set(CORE_SCHEMAS_IDL_DIR "${BOND_IDL}/bond/core")
+endif()
+
 set (core_schemas
-    ${BOND_IDL}/bond/core/bond.bond
-    ${BOND_IDL}/bond/core/bond_const.bond)
+    "${CORE_SCHEMAS_IDL_DIR}/bond.bond"
+    "${CORE_SCHEMAS_IDL_DIR}/bond_const.bond")
 
 set (schemas)
-list (APPEND schemas ${core-schemas})
-
-if (BOND_ENABLE_GRPC)
-    set(grpc-flag GRPC)
-endif()
+list (APPEND schemas ${core_schemas}) # Corrected variable name from ${core-schemas} to ${core_schemas}
 
 add_bond_codegen (${core_schemas}
     ENUM_HEADER
@@ -93,10 +108,17 @@ target_compile_definitions (bond PUBLIC -DBOND_LIB_TYPE=BOND_LIB_TYPE_STATIC)
 # std::call_once. However std::once seems problematic on Linux
 # (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=60662) so for now we use
 # std::call_once only on MSVC.
-if (Boost_SYSTEM_FOUND AND Boost_THREAD_FOUND OR NOT MSVC)
-    target_link_libraries (bond INTERFACE
-        ${Boost_SYSTEM_LIBRARY}
-        ${Boost_THREAD_LIBRARY})
+# if (Boost_SYSTEM_FOUND AND Boost_THREAD_FOUND OR NOT MSVC) # Old Boost linking
+target_link_libraries (bond INTERFACE Boost::system Boost::thread) # Conan Boost linking
+# endif()
+
+# Link RapidJSON
+target_link_libraries(bond PRIVATE RapidJSON::rapidjson)
+
+# Link gRPC if enabled
+if(BOND_ENABLE_GRPC AND TARGET gRPC::grpc++)
+    target_link_libraries(bond PRIVATE gRPC::grpc++) # Adjust target name if needed
+    # If there's a specific bond_grpc library target, link it here or ensure gRPC features are part of 'bond'
 endif()
 
 add_library (bond_apply
@@ -104,7 +126,7 @@ add_library (bond_apply
     ${schemas}
     ${generated_files_apply})
 
-target_link_libraries (bond_apply bond)
+target_link_libraries (bond_apply PRIVATE bond) # Changed from PUBLIC to PRIVATE as apply is an internal detail usually
 target_include_directories (bond_apply BEFORE PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
 

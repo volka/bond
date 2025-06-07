@@ -37,7 +37,21 @@
         # The slowest configurations should come first to help reduce
         # overall completion time since we run multiple configurations in
         # parallel.
+        global:
+            STACK_ROOT: "c:\sr"
+            CONAN_USER_HOME: "C:\" # Recommended for Conan on Windows CI to avoid long paths
+        BOND_TOKEN:
+            secure: MdnZ86SpR3+/fVz2u31blV83LH6juiobrvO/l1Ak4zG7ykxtvfUI/Vd4l7etYB4J
+        # The slowest configurations should come first to help reduce
+        # overall completion time since we run multiple configurations in
+        # parallel.
         matrix:
+            # ... existing matrix entries ...
+            - BOND_BUILD: C++-Conan
+              APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019 # Use a more recent image if possible
+              BOND_ARCH: 64 # Example architecture
+              BOND_CONFIG: Release # Example config
+              BOND_GRPC_ENABLED: true # Example option
               # C++ Core build and tests (Visual C++ 2013)
             - BOND_BUILD: C++
               BOND_VS_VERSION: Visual Studio 2013
@@ -82,44 +96,62 @@
         - sc config wuauserv start= auto
         - net start wuauserv
         - ps: >-
-            if (-not $env:BOND_VS_VERSION)
-            {
-                $env:BOND_VS_VERSION = $env:APPVEYOR_BUILD_WORKER_IMAGE
+            if ($env:BOND_BUILD -eq 'C++-Conan') {
+                Write-Host "Setting up for C++ Conan build..."
+                # Install Python (if not already suitable version present)
+                # AppVeyor images usually have Python. Let's ensure pip is available.
+                # Example: choco install python --version 3.8.2 -y --force
+                # $env:Path = "C:\Python38;C:\Python38\Scripts;$env:Path"
+                pip install --upgrade pip
+                pip install conan
+                choco install haskell-stack -y --force # Ensure stack is installed
+                $env:Path = "$env:STACK_ROOT\bin;$env:APPDATA\local\bin;$env:Path" # Add stack to PATH
+                stack --version
+                conan profile new default --detect --force
+                # MSVC compiler settings for the default profile
+                if ($env:APPVEYOR_BUILD_WORKER_IMAGE -match "Visual Studio 2019") {
+                    conan profile update settings.compiler=msvc default
+                    conan profile update settings.compiler.version=192 default
+                    $runtime = if ($env:BOND_CONFIG -eq "Debug") { "MDd" } else { "MD" }
+                    conan profile update settings.compiler.runtime=$runtime default
+                } elseif ($env:APPVEYOR_BUILD_WORKER_IMAGE -match "Visual Studio 2017") {
+                    conan profile update settings.compiler=msvc default
+                    conan profile update settings.compiler.version=191 default
+                    $runtime = if ($env:BOND_CONFIG -eq "Debug") { "MDd" } else { "MD" }
+                    conan profile update settings.compiler.runtime=$runtime default
+                }
+                conan profile update settings.compiler.cppstd=14 default # Or 17, matching project
+                Write-Host "Conan and Stack setup complete for C++-Conan build."
+
+            } elseif (($env:BOND_BUILD -eq 'C++') -or ($env:BOND_BUILD -eq 'Python')) {
                 if (-not $env:BOND_VS_VERSION)
                 {
-                    $env:BOND_VS_VERSION = 'Visual Studio 2015'
+                    $env:BOND_VS_VERSION = $env:APPVEYOR_BUILD_WORKER_IMAGE
+                    if (-not $env:BOND_VS_VERSION)
+                    {
+                        $env:BOND_VS_VERSION = 'Visual Studio 2015'
+                    }
                 }
-            }
-
-            if (($env:BOND_BUILD -eq 'C++') -or ($env:BOND_BUILD -eq 'Python')) {
-
                 git submodule update --init thirdparty\rapidjson
-
                 # If gRPC is not disabled, init gRPC and its dependencies
-
                 if (($env:BOND_BUILD -eq 'C++') -and (-not ($env:BOND_CMAKE_FLAGS -match '-DBOND_ENABLE_GRPC=FALSE'))) {
                     git submodule update --init --recursive thirdparty\grpc
                 }
-
                 $boostComponents = (
                     'boost_chrono',
                     'boost_date_time',
                     'boost_thread',
                     'boost_system',
                     'boost_unit_test_framework')
-
                 if ($env:BOND_BUILD -eq 'Python') {
                     $boostComponents += 'boost_python'
                 }
-
                 $vcToolsetVer = tools\ci-scripts\windows\ConvertTo-MsvcVersion.ps1 `
                     -ImageName $env:BOND_VS_VERSION `
                     -Format VcToolSetVer
-
                 $boostLoc = tools\ci-scripts\windows\Get-BoostLocation.ps1 `
                     -Version $env:BOND_BOOST `
                     -VcToolSetVer $vcToolSetVer
-
                 if (-not $boostLoc)
                 {
                     $boostLoc = tools\ci-scripts\windows\Install-Boost.ps1 `
@@ -127,223 +159,170 @@
                         -VcToolSetVer $vcToolSetVer `
                         -Components $boostComponents
                 }
-
                 if ((-not $boostLoc) -or (-not $boostLoc['BOOST_LIBRARYDIR'][$env:BOND_ARCH]))
                 {
                     throw "No Boost libraries found/installed for $env:BOND_BOOST $env:BOND_ARCH"
                 }
-
                 $env:BOOST_ROOT = $boostLoc['BOOST_ROOT']
                 $env:BOOST_LIBRARYDIR = $boostLoc['BOOST_LIBRARYDIR'][$env:BOND_ARCH]
+                choco install haskell-stack -y # Ensure stack is available for non-Conan C++ too
+            } elseif ($env:BOND_BUILD -eq 'C#') {
+                # Potentially C# specific setup here
+                choco install haskell-stack -y # Ensure stack is available for C# if gbc is indirectly used
             }
 
-            choco install haskell-stack -y
+            # Common installations for most jobs (dotnetcore, path updates)
+            # Note: haskell-stack is installed conditionally above or here if it's always needed
+            # choco install haskell-stack -y # Can be here if all jobs need it and not handled above
 
             choco install dotnetcore-sdk -y
 
             # choco install updated the path, so re-read them from the registry and reset $env:path
-
             $machinePath = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-
             $userPath = [System.Environment]::GetEnvironmentVariable("Path","User")
-
             $env:Path = "$machinePath;$userPath"
 
             if ($env:BOND_BUILD -eq "Doc") {
-
                 choco install pandoc --version 1.19.2  -y
-
                 choco install doxygen.install -y
-
                 $machinePath = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-
                 $userPath = [System.Environment]::GetEnvironmentVariable("Path","User")
-
                 $env:Path = "$machinePath;$userPath"
-
             }
 
-            if (($env:BOND_BUILD -eq 'C++') -and (-not ($env:BOND_CMAKE_FLAGS -match '-DBOND_ENABLE_GRPC=FALSE'))) {
-
-                # We're building C++ and gRPC isn't disabled, so we need
+            if (($env:BOND_BUILD -eq 'C++') -and (-not ($env:BOND_CMAKE_FLAGS -match '-DBOND_ENABLE_GRPC=FALSE')) -and ($env:BOND_BUILD -ne 'C++-Conan')) {
+                # We're building C++ (non-Conan) and gRPC isn't disabled, so we need
                 # gRPC dependencies.
-
                 choco install yasm -y
-
                 $machinePath = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-
                 $userPath = [System.Environment]::GetEnvironmentVariable("Path","User")
-
                 $env:Path = "$machinePath;$userPath"
-
             }
 
     cache:
         - cs\packages -> cs\test\core\packages.config
         - "c:\\sr"
+        - "%CONAN_USER_HOME%/.conan/data" # Cache Conan packages
 
     before_build:
         - ps: >-
-            $env:PreferredToolArchitecture = "x64"
-
-            $env:_IsNativeEnvironment = "true"
-
-            $vsCmakeGeneratorNum = tools\ci-scripts\windows\ConvertTo-MsvcVersion.ps1 `
-                -ImageName $env:BOND_VS_VERSION `
-                -Format CMakeGeneratorNum
-
-            $vsYear = tools\ci-scripts\windows\ConvertTo-MsvcVersion.ps1 `
-                -ImageName $env:BOND_VS_VERSION `
-                -Format Year
-
-            $cmakeGenerator = "Visual Studio $vsCmakeGeneratorNum $vsYear"
-
-            if ($env:BOND_ARCH -eq 64) {
-                $cmakeGenerator += " Win64"
-            }
-
-            $cmakeFlags = $env:BOND_CMAKE_FLAGS -split ';'
-
-            if ($env:BOND_BUILD -eq "C#" -Or $env:BOND_BUILD -eq "C++") {
-
-                dotnet restore cs\cs.sln
-
-            }
-
-            if ($env:BOND_BUILD -eq "Python" -Or $env:BOND_BUILD -eq "C++") {
-
-                # Make sure we have Python27-64 before any other version
-
+            if ($env:BOND_BUILD -eq 'C++-Conan') {
+                # No conan install here anymore, conan create handles it.
+                Write-Host "Skipping separate conan install for C++-Conan (conan create will handle)."
+            } elseif (($env:BOND_BUILD -eq 'C++') -or ($env:BOND_BUILD -eq 'Python')) {
+                $env:PreferredToolArchitecture = "x64"
+                $env:_IsNativeEnvironment = "true"
+                $vsCmakeGeneratorNum = tools\ci-scripts\windows\ConvertTo-MsvcVersion.ps1 `
+                    -ImageName $env:BOND_VS_VERSION `
+                    -Format CMakeGeneratorNum
+                $vsYear = tools\ci-scripts\windows\ConvertTo-MsvcVersion.ps1 `
+                    -ImageName $env:BOND_VS_VERSION `
+                    -Format Year
+                $cmakeGenerator = "Visual Studio $vsCmakeGeneratorNum $vsYear"
                 if ($env:BOND_ARCH -eq 64) {
-                    $env:Path = "C:\Python27-x64\scripts;C:\Python27-x64\;${env:Path}"
+                    $cmakeGenerator += " Win64"
                 }
-
+                $cmakeFlags = $env:BOND_CMAKE_FLAGS -split ';'
+                if ($env:BOND_BUILD -eq "Python" -Or $env:BOND_BUILD -eq "C++") {
+                    # Make sure we have Python27-64 before any other version
+                    if ($env:BOND_ARCH -eq 64) {
+                        $env:Path = "C:\Python27-x64\scripts;C:\Python27-x64\;${env:Path}"
+                    }
+                }
+                if ($env:BOND_BUILD -eq "Python") {
+                    mkdir build
+                    cd build
+                    cmake "-DBoost_ADDITIONAL_VERSIONS=${env:BOND_BOOST}" $cmakeFlags -G $cmakeGenerator ..
+                }
+                if ($env:BOND_BUILD -eq "C++") {
+                    # We don't always need all of these compat tests--depending
+                    # on what part of C++ we're building--but they're pretty
+                    # fast to build, so build them all.
+                    $compatTests = ('Tests\Compat', 'Tests\GrpcCompatClient', 'Tests\GrpcCompatServer')
+                    dotnet msbuild cs\cs.sln /verbosity:minimal "/target:$($compatTests -join ';')"
+                    if (-not $?) { throw "cs compat build failed" }
+                    mkdir build
+                    cd build
+                    cmake $cmakeFlags -G $cmakeGenerator .. 2>cmake_stderr.log
+                    Get-Content cmake_stderr.log
+                }
+            } elseif ($env:BOND_BUILD -eq "C#") {
+                 dotnet restore cs\cs.sln
             }
-
-            if ($env:BOND_BUILD -eq "Python") {
-
-                mkdir build
-
-                cd build
-
-                cmake "-DBoost_ADDITIONAL_VERSIONS=${env:BOND_BOOST}" $cmakeFlags -G $cmakeGenerator ..
-
-            }
-
-            if ($env:BOND_BUILD -eq "C++") {
-
-                # We don't always need all of these compat tests--depending
-                # on what part of C++ we're building--but they're pretty
-                # fast to build, so build them all.
-
-                $compatTests = ('Tests\Compat', 'Tests\GrpcCompatClient', 'Tests\GrpcCompatServer')
-
-                dotnet msbuild cs\cs.sln /verbosity:minimal "/target:$($compatTests -join ';')"
-
-                if (-not $?) { throw "cs compat build failed" }
-
-                mkdir build
-
-                cd build
-
-                cmake $cmakeFlags -G $cmakeGenerator .. 2>cmake_stderr.log
-
-                Get-Content cmake_stderr.log
-
-            }
-
             if ($env:BOND_BUILD -eq "Doc") {
-
                 mkdir build
-
                 cd build
-
                 cmake ../doc
-
             }
-
 
     build_script:
         - ps: >-
-            $env:PreferredToolArchitecture = "x64"
+            if ($env:BOND_BUILD -eq 'C++-Conan') {
+                Write-Host "Running C++ Conan create (build and test)..."
+                cd cpp
 
-            $env:_IsNativeEnvironment = "true"
+                $conanCreateArgs = @("create", ".", "--name=bond-cpp", "--version=0.13.2", "--user=bond", "--channel=testing", "--build=missing")
+                $conanCreateArgs += "-s", "arch=$env:BOND_ARCH", "-s", "build_type=$env:BOND_CONFIG"
 
-            if ($env:BOND_BUILD -eq "Doc") {
+                if ($env:BOND_GRPC_ENABLED -eq 'true') {
+                    $conanCreateArgs += "-o", "bond-cpp:bond_enable_grpc=True"
+                } else {
+                    $conanCreateArgs += "-o", "bond-cpp:bond_enable_grpc=False"
+                }
+                # MSVC compiler settings are expected to be in the default profile configured during 'install'
 
+                conan $conanCreateArgs
+
+                cd ..
+                Write-Host "C++ Conan create completed."
+            } elseif ($env:BOND_BUILD -eq "Doc") {
+                $env:PreferredToolArchitecture = "x64" # Ensure these are set for Doc too if needed
+                $env:_IsNativeEnvironment = "true"
                 cmake --build . --target documentation -- /verbosity:minimal /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
-
                 if ($? -And $env:BOND_TOKEN -And $env:APPVEYOR_REPO_BRANCH -eq "master") {
-
                     git config --global user.email "bondlab@microsoft.com"
-
                     git config --global user.name "Appveyor"
-
                     git clone -b gh-pages "https://${env:BOND_TOKEN}@github.com/microsoft/bond.git" gh-pages 2>&1 | out-null
-
                     cd gh-pages
-
                     if (-not $?) { throw "Cloning gh-pages failed" }
-
                     Remove-Item * -Recurse
-
                     Copy-Item ..\html\* . -Recurse
-
                     git add --all .
-
                     git commit -m "Update documentation"
-
                     git push origin gh-pages 2>&1 | out-null
-
                     cd ..
                 }
-
-            }
-
-            if ($env:BOND_BUILD -eq "Python") {
-
+            } elseif ($env:BOND_BUILD -eq "Python") {
+                $env:PreferredToolArchitecture = "x64" # Ensure these are set for Python too
+                $env:_IsNativeEnvironment = "true"
                 cmake --build . --target python_unit_test -- /verbosity:minimal /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
-
-            }
-
-            if ($env:BOND_BUILD -eq "C++") {
-
+            } elseif ($env:BOND_BUILD -eq "C++") {
+                $env:PreferredToolArchitecture = "x64" # Ensure these are set for C++ too
+                $env:_IsNativeEnvironment = "true"
                 cmake --build . --target check -- /verbosity:minimal /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
-
-            }
-
-            if ($env:BOND_BUILD -eq "C#") {
-
+            } elseif ($env:BOND_BUILD -eq "C#") {
                 dotnet msbuild cs\cs.sln /verbosity:minimal /p:Configuration=${env:BOND_CONFIG}
-
             }
-
             if (-not $?) { throw "build failed" }
 
     test_script:
         - ps: >-
-            if ($env:BOND_BUILD -eq "Python") {
-
+            if ($env:BOND_BUILD -eq 'C++-Conan') {
+                Write-Host "Tests were executed as part of 'conan create'."
+                # No separate test command needed here if conan create's test() method ran.
+            } elseif ($env:BOND_BUILD -eq "Python") {
                 ctest -C Debug --tests-regex python_unit_test --output-on-failure
                 if (-not $?) { throw "tests failed" }
-
-            }
-
-            if ($env:BOND_BUILD -eq "C#") {
+            } elseif ($env:BOND_BUILD -eq "C#") {
                 dotnet test cs\test\core\Core.csproj
                 if (-not $?) { throw "tests failed" }
-
                 dotnet test cs\test\coreNS10\CoreNS10.csproj
                 if (-not $?) { throw "tests failed" }
-
                 dotnet test cs\test\internal\Internal.csproj
                 if (-not $?) { throw "tests failed" }
-
                 dotnet test cs\test\grpc\grpc.csproj
                 if (-not $?) { throw "tests failed" }
-
                 & cs\test\test-examples.ps1 -IgnorePatterns '*\shared-types-assembly\*' -ErrorVariable exampleErrors
                 if ($exampleErrors) { throw "One or more example failed. See above for details." }
             }
-
             if (-not $?) { throw "build failed" }
