@@ -10,7 +10,7 @@
 #include "reflection.h"
 #include "runtime_schema.h"
 
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/make_shared.hpp>
 
 #include <limits>
@@ -162,6 +162,23 @@ namespace detail
 }
 
 
+struct SchemaReader
+{
+    using Parser = StaticParser<SchemaReader&>;
+
+    template<typename T>
+    bool CanReadArray(uint32_t /*num_elems*/) const
+    {
+        return true;
+    }
+};
+
+
+template <typename Unused> struct
+uses_marshaled_bonded<SchemaReader&, Unused> : std::false_type
+{};
+
+
 //
 // InitSchemaDef transform creates an instance of runtime schema for the input
 //
@@ -189,7 +206,7 @@ public:
     template <typename T>
     bool Base(const T& /*value*/) const
     {
-        TypeDef type = GetTypeDef<T>();
+        TypeDef type = GetTypeDef<typename remove_bonded<T>::type>();
         This().base_def.set(type);
         return false;
     }
@@ -202,7 +219,7 @@ public:
 
         field.id = id;
         field.metadata = metadata;
-        field.type = GetTypeDef<typename remove_maybe<T>::type>();
+        field.type = GetTypeDef<typename remove_bonded_value<T>::type>();
 
         This().fields.push_back(field);
         return false;
@@ -309,15 +326,7 @@ namespace detail
 template <typename T, typename Unused>
 void SchemaCache<T, Unused>::AppendStructDef(SchemaDef* s)
 {
-    // To apply InitSchemaDef transform we need a reference to an
-    // object T. However the transform never accesses the object or
-    // its fields. We can't construct an actual object since we
-    // need to support stateful allocators that can't allocate from
-    // a default-constructed instance and containers which allocate in
-    // default constructor.
-    //
-    // Thus, we make a dummy const T& from a nullptr.
-    Apply(InitSchemaDef(*s), static_cast<const T&>(*static_cast<T*>(0)));
+    Apply<T>(InitSchemaDef{ *s });
 }
 
 } // detail
@@ -354,25 +363,6 @@ inline RuntimeSchema key_schema(const RuntimeSchema& schema)
 }
 
 
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-
-/// @brief Returns a const reference to a map of values for a user defined enum
-template <typename T>
-inline const std::map<T, std::string>& GetEnumValues()
-{
-    return GetValueToNameMap(T());
-}
-
-
-/// @brief Returns a const reference to a map of names for a user defined enum
-template <typename T>
-inline const std::map<std::string, T>& GetEnumNames()
-{
-    return GetNameToValueMap(T());
-}
-
-#else
-
 /// @brief Returns a const reference to a map of values for a user defined enum
 template <typename T, typename Map = std::map<T, std::string> >
 inline const Map& GetEnumValues()
@@ -388,6 +378,5 @@ inline const Map& GetEnumNames()
     return GetNameToValueMap(T{}, detail::mpl::identity<Map>{});
 }
 
-#endif
 
 } // namespace bond

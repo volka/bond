@@ -95,6 +95,13 @@ public:
         detail::Read(*GetValue(), var);
     }
 
+    // Does the reader have enough input buffer left to read an array of T?
+    template<typename T>
+    bool CanReadArray(uint32_t /*num_elems*/) const
+    {
+        return true;
+    }
+
     template <typename T>
     void ReadContainerBegin(uint32_t&, T&)
     {
@@ -230,23 +237,8 @@ private:
             return *this;
         }
 
-        #if defined(_MSC_VER) && _MSC_VER < 1900
-        // MSVC cannot = default rvalue ctor or move-assign operators
-        StreamHolder(StreamHolder&& other)
-            : _stream(std::move(other._stream)),
-              _parent(std::move(other._parent))
-        { }
-
-        StreamHolder& operator=(StreamHolder&& other)
-        {
-            _stream = std::move(other._stream);
-            _parent = std::move(other._parent);
-            return *this;
-        }
-        #else
         StreamHolder(StreamHolder&&) = default;
         StreamHolder& operator=(StreamHolder&&) = default;
-        #endif
 
         const detail::RapidJsonInputStream<Buffer>& Get() const
         {

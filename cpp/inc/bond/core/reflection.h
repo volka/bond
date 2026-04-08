@@ -71,6 +71,9 @@ template <
     const bond::Metadata* metadata_ptr>
 struct FieldTemplate
 {
+    // Note: When introducing new names inside this scope, remember to update the
+    // fieldTemplateReservedNames list in Reflection_h.hs
+
     /// @brief Type of the field's parent struct
     typedef Struct struct_type;
 
@@ -139,67 +142,6 @@ template
 >
 const typename FieldTemplate<field_id, ModifierTag, Struct, FieldType, field_ptr, metadata_ptr>::field_pointer
     FieldTemplate<field_id, ModifierTag, Struct, FieldType, field_ptr, metadata_ptr>::field = field_ptr;
-
-
-template <typename Service, typename Input, typename Result> struct
-method_pointer
-{
-    typedef void (Service::*type)(
-        const Input&,
-        const std::function<void(const Result&)>&);
-};
-
-
-template <typename Service, typename Input> struct
-method_pointer<Service, Input, void>
-{
-    typedef void (Service::*type)(const Input&);
-};
-
-
-/// @brief Method description in compile-time schema
-template <
-    typename Service,
-    typename Input,
-    typename Result,
-    typename method_pointer<Service, Input, Result>::type method_ptr,
-    const Metadata* metadata_ptr>
-struct MethodTemplate
-{
-    /// @brief Type of the service
-    typedef Service service_type;
-
-    /// @brief Type of the request
-    typedef Input input_type;
-
-    /// @brief Type of the response
-    typedef Result result_type;
-
-    /// @brief Static data member describing method metadata
-    static const Metadata& metadata;
-
-    /// @brief Static data member representing the member pointer to the method
-    static const typename method_pointer<service_type, input_type, result_type>::type method;
-};
-
-
-template <
-    typename Service,
-    typename Input,
-    typename Result,
-    typename method_pointer<Service, Input, Result>::type method_ptr,
-    const bond::Metadata* metadata_ptr>
-const bond::Metadata&
-    MethodTemplate<Service, Input, Result, method_ptr, metadata_ptr>::metadata = *metadata_ptr;
-
-template <
-    typename Service,
-    typename Input,
-    typename Result,
-    typename method_pointer<Service, Input, Result>::type method_ptr,
-    const bond::Metadata* metadata_ptr>
-const typename method_pointer<Service, Input, Result>::type
-    MethodTemplate<Service, Input, Result, method_ptr, metadata_ptr>::method = method_ptr;
 
 
 // Metadata initializer for fields
@@ -377,10 +319,29 @@ remove_bonded
 };
 
 
-template <typename T> struct
-remove_bonded<bonded<T> >
+template <typename T, typename Reader> struct
+remove_bonded<bonded<T, Reader> >
 {
     typedef typename remove_bonded<T>::type type;
+};
+
+
+template <typename T> struct
+remove_bonded_value
+{
+    typedef T type;
+};
+
+template <typename T, typename Reader> struct
+remove_bonded_value<bonded<T, Reader> >
+{
+    typedef T type;
+};
+
+template <typename T, typename Reader> struct
+remove_bonded_value<value<T, Reader> >
+{
+    typedef T type;
 };
 
 

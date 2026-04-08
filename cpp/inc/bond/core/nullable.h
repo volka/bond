@@ -66,10 +66,6 @@ to_address(const Ptr& ptr) BOND_NOEXCEPT
 template <typename T, typename Enable = void>
 class nullable;
 
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#pragma warning(push)
-#pragma warning(disable: 4510) // default constructor could not be generated
-#endif
 template <typename T>
 class nullable<T, typename boost::enable_if<detail::use_value<T> >::type>
     : private detail::allocator_holder<typename detail::allocator_type<T>::type>
@@ -260,9 +256,6 @@ private:
 
     boost::optional<T> _value;
 };
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#pragma warning(pop)
-#endif
 
 
 /** @brief Nullable type */
@@ -569,6 +562,19 @@ void resize_list(nullable<T>& value, uint32_t size)
     }
 }
 
+// reset_list
+template <typename T>
+void reset_list(nullable<T>& value, uint32_t /*size_hint*/)
+{
+    value.reset();
+}
+
+// insert_list
+template <typename T, typename E>
+void insert_list(nullable<T>& value, const E& item)
+{
+    return value.set(item);
+}
 
 template <typename T> struct
 element_type<nullable<T> >
@@ -640,5 +646,14 @@ template <typename T> struct
 is_list_container<nullable<T> >
     : std::true_type {};
 
+namespace detail
+{
+template <typename T> struct
+is_nullable
+    : std::false_type {};
 
+template <typename T> struct
+is_nullable<bond::nullable<T> >
+    : std::true_type {};
+};
 } // namespace bond

@@ -1,5 +1,15 @@
 % A Thorough Guide to Bond for C++
 
+Bond project has ended
+======================
+
+As of March 2025, the Bond open-source project has ended. There will be no
+further activity in this project: no new features, no bug fixes, and,
+importantly, no security fixes.
+
+The documentation as it existed at the time of the end of the project
+follows.
+
 About
 =====
 
@@ -114,9 +124,9 @@ class CompactBinaryWriter;
 The `Buffer` template parameter specifies where the serialized payload is
 respectively read from and written to. This constitutes the second layer of
 customization. Bond comes with built-in buffers implemented on top of memory
-[blobs][blob_reference], `InputBuffer` and `OutputBuffer`, but applications can
-also define [custom buffers](#custom-buffers) by implementing simple stream
-interfaces.
+[blobs][blob_reference], `InputBuffer` and `OutputBuffer`, but applications
+can also define custom buffers by [implementing simple stream
+interfaces](#custom-streams).
 
 The full protocol class names can be unwieldy and it is often convenient to
 define shorter type aliases:
@@ -239,9 +249,10 @@ consideration about how the change is rolled out:
 These following changes will break wire compatibility and are not recommended:
 
 - Adding or removing `required` fields
-- Incompatible change of field types (any type change *not* covered above); e.g.:
-  `int32` to `string`, `string` to `wstring`
-- Changing of field ordinals
+- Incompatible change of field types (any type change *not* covered above);
+  e.g.: `int32` to `string`, `string` to `wstring`, `float` to
+  `nullable<float>`
+- Changing of field ordinals/ids
 - Changing of inheritance hierarchy (add/remove/substituting base struct)
 - Changing between `required` and `optional` directly
 - Changing the default value of a field
@@ -250,8 +261,9 @@ These following changes will break wire compatibility and are not recommended:
 
 Some best practices and other considerations to keep in mind:
 
-- When removing a field, comment it out rather than removing it altogether so
-  that the field ordinal is not reused in future edits of the schema
+- When removing a field, comment it out rather than removing it altogether
+  so that neither the field ordinal nor name are reused in future edits of
+  the schema
 - When working with untagged protocols like
   [SimpleBinaryProtocol](#simple-binary), great care must be taken to ensure
   the same [schema](#runtime-schema) is used when deserializing the payload as
@@ -1266,7 +1278,11 @@ Implemented in [`CompactBinaryReader`][compact_binary_reader_reference] and
 Version 2 of Compact Binary adds length prefix for structs. This enables
 deserialization of [`bonded<T>`](#understanding-bondedt) and skipping of
 unknown fields in constant time. The trade-off is double pass encoding,
-resulting in up to 30% slower serialization performance.
+resulting in up to 30% slower serialization performance. You can enable Compact
+Binary version 2 by instantiating the
+[`CompactBinaryReader`][compact_binary_reader_reference] and
+[`CompactBinaryWriter`][compact_binary_writer_reference] classes with their
+second optional constructor argument (`version`) set to the integer 2.
 
 See also [Compact Binary encoding reference][compact_binary_format_reference].
 
@@ -1481,6 +1497,14 @@ uint32_t container_size(const T& container);
 template <typename T>
 void resize_list(T& list, uint32_t size);
 
+// Added in Bond 13. See note below.
+template <typename T>
+void reset_list(T& list, uint32_t size_hint);
+
+// Added in Bond 13. See note below.
+template <typename T, typename E>
+void insert_list(T& list, const E& item);
+
 template <typename T>
 void clear_set(T& set);
 
@@ -1493,6 +1517,20 @@ void clear_map(T& map);
 template <typename M, typename K, typename T>
 T& mapped_at(M& map, const K& key);
 ```
+
+> **NOTE** The functions `reset_list` and `insert_list` need to be implemented 
+> carefully to guard against DoS attacks through excessive memory allocation.
+> The function `reset_list` is called by Bond to prepare a container for inserting
+> deserialized elements. The application should examine `size_hint`; if this value
+> is unreasonably high, an exception should be thrown to signal error. Otherwise,
+> the client code should clear the container but __refrain from allocating__ any memory
+> for the data. This is because Bond is unable to verify that the payload actually
+> contains the declared number of items. Bond will then iteratively deserialize and
+> insert individual items into the container by calling `insert_list`. Custom 
+> implementations should insert the provided item into the collection. It is a good
+> practice to check that the number of items in the container does not exceed 
+> `size_hint`.
+
 
 Note that unlike the traits which need to be specialized in the `bond`
 namespace, these function can be overloaded in the namespace of the container
@@ -1645,6 +1683,20 @@ typename aliased_type<T>::type get_aliased_value(const T& value);
 
 - `examples/cpp/core/time_alias`
 
+Smart pointers
+--------------
+References to values are obtained with `get_ref`:
+```cpp
+template <typename T>
+inline T& get_ref(T& t);
+```
+
+To use containers of smart pointers, Bond needs to make sure that an object is 
+constructed before its reference is taken. In `get_ref` that object is created
+if needed.
+
+- `examples/cpp/core/container_of_pointers`
+
 Custom allocators
 =================
 
@@ -1705,6 +1757,13 @@ public:
 
     // Read into a memory blob
     void Read(bond::blob& blob, uint32_t size);
+
+    // Advance buffer pointer by size Bytes without returning the data. If size is
+    // smaller than the remaining buffer size, throw a StreamException.
+    void Skip(uint32_t size);
+
+    // Return true iff the next Read of size Bytes succeeds.
+    bool CanRead(uint32_t size) const;
 };
 ```
 
@@ -2013,9 +2072,6 @@ References
 [Python User's Manual][bond_py]
 ----------------------------
 
-[Bond-over-gRPC overview][bond_over_grpc]
-----------------------------
-
 [API_reference]: ../reference/cpp/index.html
 
 [compiler]: compiler.html
@@ -2025,8 +2081,6 @@ References
 [bond_cs]: bond_cs.html
 
 [bond_java]: bond_java.html
-
-[bond_over_grpc]: bond_over_grpc.html
 
 [serializing_transform_ref]:
 ../reference/cpp/structbond_1_1_serializing_transform.html

@@ -3,20 +3,18 @@ cmake_minimum_required (VERSION 3.1)
 project (bond)
 cmake_policy (SET CMP0022 NEW)
 
+if (POLICY CMP0077)
+    # Allow CMake 3.13+ to override options when using FetchContent/add_subdirectory.
+    cmake_policy(SET CMP0077 NEW)
+endif ()
+
 set (CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cmake-modules)
 
-# Initialize before ThirdParty
-set (BOND_ENABLE_GRPC
-    "TRUE"
-    CACHE BOOL "If FALSE, then do not build gRPC integration")
 set (BOND_FIND_RAPIDJSON
     "FALSE"
-    CACHE BOOL "If FALSE, then use and install rapidjson from thirdparty subdirectory")
-# We need to include third-party CMake modules before we configure our own
-# settings so that we don't apply our settings to third-party code.
-add_subdirectory (thirdparty)
+    CACHE BOOL "If FALSE, then use and install rapidjson from the /thirdparty subdirectory")
 
 enable_testing()
 

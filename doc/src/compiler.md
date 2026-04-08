@@ -1,5 +1,15 @@
 % Bond compiler
 
+Bond project has ended
+======================
+
+As of March 2025, the Bond open-source project has ended. There will be no
+further activity in this project: no new features, no bug fixes, and,
+importantly, no security fixes.
+
+The documentation as it existed at the time of the end of the project
+follows.
+
 Command line options
 ====================
 
@@ -110,8 +120,8 @@ struct Example : Base
 }
 ```
 
-Field definition consists of an ordinal, type, name and optional default value.
-Field type can be:
+Field definition consists of an ordinal/id, type, name, and a default value.
+The fields type's can be:
 
 - Basic type: `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`,
 `int32`, `int64`, `float`, `double`, `string`, `wstring`.
@@ -124,7 +134,7 @@ Field type can be:
 An optional default value can be specified for fields of basic types. For
 integers the default can be specified as either a decimal number or a
 hexadecimal number prefixed with `0x`. The only explicit default value allowed
-for containers is [`nothing`](#default-value-of-nothing). Enum fields must have
+for containers is [`nothing`](#default-value-of-nothing). Enum fields _must_ have
 an explicit default value which must be one of the enum named constants or
 [`nothing`](#default-value-of-nothing).
 
@@ -211,8 +221,9 @@ including a definition of another alias:
 using times = array<time>;
 ```
 
-Type aliases can optionally be [mapped to custom types](#custom-type-mappings)
-in the generated code.
+Type aliases can optionally be mapped to custom types in the generated code
+for both [C++](bond_cpp.html#custom-type-mappings) and
+[C#](bond_cs.html#custom-type-mappings).
 
 See examples:
 
@@ -264,6 +275,10 @@ See example: `examples/cpp/core/schema_view`
 Service definition
 ------------------
 
+As of Bond version 11, services are not supported during codegen nor at
+runtime. Service definitions can still appear in .bond files, and gbc be
+used to parse service definitions to the JSON AST.
+
 A service definition consists of a service name and methods:
 
 ```
@@ -306,9 +321,6 @@ bond.Void`, which uses the pre-defined `bond.Void` struct in bond.bond.
 For duplex streaming methods, the parameters and results do not have to have
 a 1:1 correspondence. The server is free to return results at any time
 during the lifetime of the method invocation.
-
-NB: Streaming methods are currently only supported when generating C# and
-using Bond-over-gRPC.
 
 Methods with a result of `nothing` are one-way, fire and forget methods: the
 service doesn't send any response regardless of whether the service method

@@ -1,3 +1,12 @@
+# Bond project has ended #
+
+As of March 2025, the Bond open-source project has ended. There will be no
+further activity in this project: no new features, no bug fixes, and,
+importantly, no security fixes. See the [README](README.md) for more
+details.
+
+The project's original changelog is below.
+
 # Bond Changelog #
 
 Notable changes--especially new features and **breaking changes**--are
@@ -11,24 +20,383 @@ tag versions. The Bond compiler (`gbc`) and
 different versioning scheme, following the Haskell community's
 [package versioning policy](https://wiki.haskell.org/Package_versioning_policy).
 
-## Unreleased  ##
-* `gbc` & compiler library: TBD
-* IDL core version: TBD
-* C++ version: minor bump needed
-* C# NuGet version: TBD
+## 13.0.2: 2024-11-06 ##
+
+* IDL core version: 3.0
+* C++ version: 13.0.1
+* C# NuGet version: 13.0.2
+* Java version: 13.0.1
+* `gbc` & compiler library: 0.13.0.0
+
+### Java ###
+
+* There were no Java changes in this release.
+
+### C++ ###
+
+* There were no Java changes in this release.
+
+### C# ###
+
+* Fixed assembly versions in NuGet packages.
+
+## 13.0.1: 2024-10-02 ##
+
+* IDL core version: 3.0
+* C++ version: 13.0.1
+* C# NuGet version: 13.0.1
+* Java version: 13.0.1
+* `gbc` & compiler library: 0.13.0.0
+
+### Java ###
+
+* There were no Java changes in this release.
+
+### C++ ###
+
+* `InputBuffer` throws a `StreamException` when trying to skip beyond the 
+  end of the stream. This mitigates a CPU DoS vulnerability.
+* Deserialization from JSON payloads will no longer process very deeply
+  nested structures. Instead, a `bond::CoreException` will be thrown in
+  order to protect against stack overflows. The depth limit may be changed
+  by calling the function `bond::SetDeserializeMaxDepth(uint32_t)`.
+* **Breaking change**: Protocols must now implement `CanReadArray` method and
+  Buffers must implement `CanRead` method. These are used to perform checks that
+  mitigate memory allocation vulnerabilities.
+* **Breaking change**: Custom containers must implement `reset_list` and `list_insert`.
+  Standard implementations are provided. This API is used to incrementally fill
+  containers of complex types when preallocation may be unsafe. Expected container
+  size is provided in `reset_list`, where client code can perform sanity checks before
+  any memory is allocated by Bond.
+* `bond::CoreException` is thrown when the payload has a greater declared size
+  than the backing buffer.
+* **Known issue**: Debug builds with MSVC 14.0 (Visual Studio 2015) may fail at
+  runtime if custom allocators for containers are used. Newer MSVC versions and
+  other compilers are not affected, neither are Release builds with MSVC 14.0. This
+  can be worked around by using newer MSVC version or building in Release configuration.
+* Added support for Boost 1.83.
+
+### C# ###
+
+* Fixed compatibility with .NET 9.
+
+## 13.0 ##
+
+This version was allocated but never released.
+
+## 12.0 ##
+
+This version was allocated but never released.
+
+## 11.0.1: 2024-06-26 ##
+
+* IDL core version: 3.0
+* C++ version: 11.0.1
+* C# NuGet version: 11.0.1
+* Java version: 11.0.1
+* `gbc` & compiler library: 0.13.0.0
+
+### `gbc` and Bond compiler library ###
+* **Breaking change**: Codegen for Bond-over-gRPC has been removed: the
+  `--grpc` switch is no longer supported. Service definitions are still
+  parsed, but codegen can no longer be done for C++ or C#. See [issue
+  \#1131, Bond-over-gRPC will be deprecated February
+  2022](https://github.com/microsoft/bond/issues/1131), for the full
+  announcement.
+
+### C++ ###
+
+* **Breaking change**: All Bond-over-gRPC code has been removed. This is
+  everything under the `bond::ext:grpc` namespace. Service definitions can
+  still appear in .bond files, but no C++ code will be generated for them.
+  See [issue \#1131, Bond-over-gRPC will be deprecated February
+  2022](https://github.com/microsoft/bond/issues/1131), for the full
+  announcement.
+* By default, deserialization will no longer process very deeply nested
+  structures. Instead, an `bond::CoreException` will be thrown in order to
+  protect against stack overflows. The depth limit may be changed by calling
+  the function `bond::SetDeserializeMaxDepth(uint32_t)`.
+* Fixed handling of large containers of invalid types that could cause
+  excessive CPU use when deserializing some payloads.
+
+### C# ###
+
+* **Breaking change**: Update of Newtonsoft.Json library to version 13.3.0.
+([Issue \#1156](https://github.com/microsoft/bond/issues/1156))
+
+  This update fixes depth check in input JSON string (by default: 64).
+  Depth check is necessary to prevent stack overflow issue with long payloads.
+* **Breaking change**: The minimum supported version of .NET Framework is
+  4.6.2. Support for .NET Framework 4.5 has been dropped.
+* **Breaking change**: All Bond-over-gRPC code has been removed. This is
+  everything under the `Bond.Grpc` namespace and the Bond.Grpc.CSharp NuGet
+  package. Service definitions can still appear in .bond files, but no C#
+  code will be generated for them. See [issue \#1131, Bond-over-gRPC will be
+  deprecated February 2022](https://github.com/microsoft/bond/issues/1131),
+  for the full announcement.
+* Added codegen and deserialization support for container type aliases to
+  use
+  [System.Collections.Immutable](https://learn.microsoft.com/dotnet/api/system.collections.immutable)
+  collections. (Pull request
+  [\#1161](https://github.com/microsoft/bond/pull/1161))
+* By default, deserialization will no longer process very deeply nested
+  structures. Instead, an `InvalidOperationException` will be thrown in
+  order to protect against stack overflows. The depth limit may be changed
+  by setting the property `Bond.DeserializerControls.Active.MaxDepth`.
+
+### Java ###
+
+* By default, deserialization will no longer process very deeply nested
+  structures. Instead, a `org.bondlib.InvalidBondDataException` exception
+  will be thrown in order to protect against stack overflows. The depth
+  limit may be changed by calling the method
+  `org.bondlib.bond.DeserializerControls.setMaxDepth`.
+
+## 11.0.0 ##
+
+This version was allocated but never released.
+
+## 10.0: 2022-03-07 ##
+
+* IDL core version: 3.0
+* C++ version: 10.0
+* C# NuGet version: 10.0
+* `gbc` & compiler library: 0.12.1.0
+
+### C++ ###
+
+* **Breaking change**: Bond-over-gRPC has been marked deprecated.
+  Bond-over-gRPC will be removed in the next major version of Bond. See
+  [issue \#1131, Bond-over-gRPC will be deprecated February
+  2022](https://github.com/microsoft/bond/issues/1131), for the full
+  announcement.
+  * The `[[deprecated]]` attribute has been added to the `bond::ext::grpc`
+    namespace in every top-level Bond-over-gRPC++ header. This will cause
+    compiler warnings/errors for uses of Bond-over-gRPC++ that you may need
+    to handle.
+* Fixed multiple symbol definition for Win32Exception in
+  `grpc/win_thread_pool.h`. ([Issue
+  \#1129](https://github.com/microsoft/bond/issues/1129))
+* Add forward declaration for `GenericWriteVariableUnsigned` to fix "C3861:
+  'GenericWriteVariableUnsigned': identifier not found" when using custom
+  streams that do not have their own implementation of
+  `WriteVariableUnsigned`. ([Issue
+  \#1115](https://github.com/microsoft/bond/issues/1115))
+* Fixed `bond::DynamicParser` that may not emit transform's `OmittedField`
+  for compile-time schema and an omitted optional field in the payload.
+  ([Issue \#1120](https://github.com/microsoft/bond/issues/1120))
+* Fixed missing include directives.
+* Removed `bond::blob`'s unnecessary `_content` member, reducing its size
+  by 1 pointer.
+* Added an ability to apply transform to a schema.
+* Added `noexcept` to `bond::blob`'s non-throwing functions.
+
+### C# ###
+
+* **Breaking change**: Bond-over-gRPC code has been marked deprecated.
+  Bond-over-gRPC will be removed in the next major version of Bond. See
+  [issue \#1131, Bond-over-gRPC will be deprecated February
+  2022](https://github.com/microsoft/bond/issues/1131), for the full
+  announcement.
+  * The `[Obsolete]` attribute has been added to every public type in the
+    `Bond.Grpc` assembly. This will cause compiler warnings/errors for uses
+    of Bond-over-gRPC# that you may need to handle.
+* Added virtual method `OutputBuffer.ResizeBuffer` that can be overridden to
+  use buffer allocators other than `new byte[]` (e.g.
+  `ArrayPool<byte>.Rent()`). ([Pull request
+  \#1128](https://github.com/microsoft/bond/pull/1128))
+* The error message emitted when duplicate .bond items are detected by the
+  MSBuild codegen now correctly refers to `$(EnableDefaultItems)` as the
+  switch that controls this behavior. ([Issue
+  \#1110](https://github.com/microsoft/bond/issues/1110))
+
+## 9.0.5: 2021-04-14 ##
+
+* IDL core version: 3.0
+* C++ version: 9.0.5
+* C# NuGet version: 9.0.5
+* `gbc` & compiler library: 0.12.1.0
+
+### C++/Python ###
+
+* Added CMake variable `BOND_FIND_GRPC` to allow for external gRPC
+  installations. The search for external GRPC installations is only done
+  when `BOND_ENABLE_GRPC` is `TRUE`.
+* Removed use of deprecated `std::ptr_fun` in the Python library. ([Issue
+  \#1080](https://github.com/microsoft/bond/issues/1080))
+
+### C# ###
+
+* Implicit codegen now excludes any .bond files in the project's output
+  directories (e.g., `bin/`, `obj/debug/netstandard1.0`). This behavior
+  matches the implicit compilation behavior for .cs files.
+
+## 9.0.4: 2020-11-23 ##
+
+* IDL core version: 3.0
+* C++ version: 9.0.4
+* C# NuGet version: 9.0.3
+* `gbc` & compiler library: 0.12.1.0
+
+### C++ ###
+
+* Bond now uses the `[[noreturn]]` attribute to annotate functions that do
+  not return. Previously, it used compiler-specific annotations.
+
+### C# ###
+
+* There were no C# changes in this release.
+
+## 9.0.3: 2020-08-06 ##
+
+* IDL core version: 3.0
+* C++ version: 9.0.2
+* C# NuGet version: 9.0.3
+* `gbc` & compiler library: 0.12.1.0
+
+### C++ ###
+
+* There were no C++ changes in this release.
+
+### C# ###
+
+* Fixed a performance regression in `OutputBuffer.Grow`: it was incorrectly
+  growing the buffer by one byte at a time instead of geometrically. ([Issue
+  \#1065](https://github.com/microsoft/bond/issues/1065), [Pull request
+  \#1066](https://github.com/microsoft/bond/pull/1066))
+
+## 9.0.2: 2020-08-03 ##
+* IDL core version: 3.0
+* C++ version: 9.0.2
+* C# NuGet version: 9.0.2
+* `gbc` & compiler library: 0.12.1.0
+
+### C++ ###
+
+* gbc is now installed with 555 (r-xr-xr-x) permissions. ([Issue
+  \#1062](https://github.com/microsoft/bond/issues/1062))
+
+### C# ###
+
+* Fixed a regression writing to non-seekable streams using
+  `CompactBinaryWriter`. The fix in commit
+  [b0fd4a1](https://github.com/microsoft/bond/commit/b0fd4a15a7cae946dd2855122559ca59cc34dbea#diff-9534daaa1fb3d4776494b25c8bba3939L212)
+  inadvertently added a call to `Stream.Position` in the Release
+  configuration. This call is only intended to be made when Bond is built in
+  the Debug configuration.
+
+## 9.0.1: 2020-07-14 ##
+* IDL core version: 3.0
+* C++ version: 9.0.1
+* C# NuGet version: 9.0.1
+* `gbc` & compiler library: 0.12.1.0
+
+### C++ ###
+* The RapidJSON submodule now points to commit
+  [8f4c021](https://github.com/Tencent/rapidjson/commit/8f4c021fa2f1e001d2376095928fc0532adf2ae6).
+  This addresses some aliasing warnings in recent versions of Clang and GCC.
+    * The RapidJSON submodule now uses its new home under the [Tencent
+      organization](https://github.com/Tencent/rapidjson.git).
+
+### C# ###
+
+* Fixed MSB3105/CS2002 error about duplicate Compile items when a directory
+  contains multiple .bond files and `--gprc` is in `$BondOptions`. ([Issue
+  \#1050](https://github.com/microsoft/bond/issues/1050))
+* Fix handling of large container lengths that could cause an infinite loop
+  when deserializing some payloads. This fix addresses
+  [CVE-2020-1469](https://portal.msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2020-1469).
+
+## 9.0: 2020-05-26  ##
+* IDL core version: 3.0
+* C++ version: 9.0.0
+* C# NuGet version: 9.0.0
+* `gbc` & compiler library: 0.12.1.0
+
+### C++ ###
+* **Breaking change** MSVC 2013 support has been removed. ([Issue
+  \#851](https://github.com/microsoft/bond/issues/851))
+* **Breaking change** `bond/core/warning.h` has been deleted. Since the
+  [5.3.0 release](#530-2017-04-12), Bond hasn't needed global warning
+  suppressions for any compiler except MSVC 2013. This file was only used
+  for MSVC 2013, which is no longer a supported compiler.
+* Fixed MSVC warning for deprecation of `std::result_of_t` in `/std:c++17`.
+  ([Issue \#1007](https://github.com/microsoft/bond/issues/1007))
+* Fixed MSVC warning C5208: unnamed class used in typedef name cannot
+  declare members other than non-static data members, member enumerations,
+  or member classes. ([Issue
+  \#1027](https://github.com/microsoft/bond/issues/1027))
+* Fixed Boost 1.73 warning "The practice of declaring the Bind placeholders
+  (_1, _2, ...) in the global namespace is deprecated." ([Pull request
+  \#1036](https://github.com/microsoft/bond/pull/1036))
+
+### C# ###
+
+* Fixed creation of duplicate default constructor when defining an empty struct
+  and using `--preview-constructor-parameters`.
+  ([Issue \#963](https://github.com/microsoft/bond/issues/963))
+* The .NET assemblies are now only Authenticode signed with SHA-2. Legacy
+  Windows OS versions may need [updates to work with SHA-2
+  signatures](https://support.microsoft.com/en-us/help/4472027/2019-sha-2-code-signing-support-requirement-for-windows-and-wsus).
+
+### `gbc` and Bond compiler library ###
+* C++ codegen no longer supports MSVC 2013.
+* gbc is now only Authenticode signed with SHA-2. Legacy Windows OS versions
+  may need [updates to work with SHA-2
+  signatures](https://support.microsoft.com/en-us/help/4472027/2019-sha-2-code-signing-support-requirement-for-windows-and-wsus).
+
+## gbc & compiler library 0.12.0.1: 2019-11-21 ##
+* IDL core version: 3.0
+* C++ version: 8.2.0
+* C# NuGet version: 8.2.0
+* `gbc` & compiler library: 0.12.0.1
+
+There are no changes to code generation or the language projections.
+
+### Bond compiler library ###
+
+* Fixed Cabal packaging issues that prevented the publication of
+  [0.12.0.0](#820-2019-11-18).
+
+## 8.2.0: 2019-11-18  ##
+* IDL core version: 3.0
+* C++ version: 8.2.0
+* C# NuGet version: 8.2.0
+* `gbc` & compiler library: 0.12.0.0
 
 ### C++ ###
 
 * gRPC v1.17.1 is now required to use Bond-over-gRPC.
-* Fixed an ambigious `HexDigit` overload compilation error when
+* Fixed an ambiguous `HexDigit` overload compilation error when
   compiling with some versions of GCC. ([Pull request
-  #954](https://github.com/microsoft/bond/pull/954))
+  \#954](https://github.com/Microsoft/bond/pull/954))
+* Fixed ambiguous call to `maybe::operator==` that breaks GCC 9
+  build. ([Pull request
+  \#975](https://github.com/microsoft/bond/pull/975))
+* Fixed MSVC warning C4296: "'<': expression is always false" in protocol.h.
+  ([Issue
+  \#981](https://github.com/microsoft/bond/issues/981))
+
+### C# ###
+
+* Added .NET 4.6 target framework to Bond.IO.dll so that it can use
+  `MemoryStream.TryGetBuffer()` when cloning streams like is done when
+  targeting .NET Standard 1.3+.
+
+### Bond compiler library ###
+
+* **Breaking change** The bond compiler library (the Haskell library) and
+  `gbc` have been switched to build with stackage snapshot lts-14.4. This
+  snapshot uses megaparsec 7 and aeson 1.4.4, both of which had breaking
+  changes that are reflected in the library, e.g., the `parseBond` signature
+  has changed. There is no impact to users of the gbc command line tool or
+  changes to C++ and C# code generation.
 
 ## 8.1.0: 2019-03-27 ##
 
 ### C++ ###
 
-* C# / Nuget release only
+* There were no C++ changes in this release.
 
 ### C# ###
 
@@ -37,7 +405,7 @@ different versioning scheme, following the Haskell community's
   gRPC clients to support client-side interceptors. For more details about
   C# interceptors, see the [proposal in the gRPC
   project](https://github.com/grpc/proposal/blob/master/L12-csharp-interceptors.md).
-  [Issue #950](https://github.com/microsoft/bond/issues/950)
+  [Issue \#950](https://github.com/microsoft/bond/issues/950)
 
 ## 8.0.1: 2018-06-29 ##
 * `gbc` & compiler library: 0.11.0.3
@@ -57,7 +425,7 @@ different versioning scheme, following the Haskell community's
 
 ### C# ###
 * Fixed alias conversion issue for generic fields [Issue
-  #928](https://github.com/microsoft/bond/issues/928).
+  \#928](https://github.com/microsoft/bond/issues/928).
 
 ## 8.0.0: 2018-05-30 ##
 * `gbc` & compiler library: 0.11.0.0
@@ -70,7 +438,7 @@ different versioning scheme, following the Haskell community's
 * **Breaking change** The deprecated Bond Comm functionality has been removed.
   This includes all gbc options related to Comm and the Comm codegen templates
   in the Haskell library. [Issue
-  #824](https://github.com/microsoft/bond/issues/824)
+  \#824](https://github.com/microsoft/bond/issues/824)
 * C++ codegen now properly generates move assignment operators. Previously,
   this was broken for some cases.
 * C++ codegen no longer generates checks for C++11, except for MSVC 2013
@@ -100,19 +468,19 @@ different versioning scheme, following the Haskell community's
 * `import` statements can now end with an optional semicolon.
 * File and directory paths on the command line, in response files, or in
   `import` statements can now use a mix of forward and backslashes. [Issue
-  #869](https://github.com/microsoft/bond/issues/869)
-* gbc is now Authenticode dual-signed with both SHA1 and SHA2.
+  \#869](https://github.com/microsoft/bond/issues/869)
+* gbc is now Authenticode dual-signed with both SHA-1 and SHA-2.
 
 ### C++ ###
 
 * **Breaking change** The deprecated Bond Comm functionality has been removed.
   This includes all gbc options related to Comm and all Comm APIs and header
-  files. [Issue #824](https://github.com/microsoft/bond/issues/824)
+  files. [Issue \#824](https://github.com/microsoft/bond/issues/824)
 * **Breaking change** Only versions of Boost released in the past two years
   (1.61 and newer) are supported. Bond will *likely* continue to work with
   older versions, but it is no longer tested with anything older than 1.61.
   Test coverage for Boost versions 1.61&ndash;1.66 has been improved. [Issue
-  #771](https://github.com/microsoft/bond/issues/771)
+  \#771](https://github.com/microsoft/bond/issues/771)
 * **Breaking change** Constructors accepting a `Comparer` have been removed
   from the `bond::maybe` and `bond::nullable` types.
 * **Breaking change** The `bond::is_blob` and `bond::is_nullable` traits have
@@ -179,16 +547,16 @@ different versioning scheme, following the Haskell community's
 * gRPC v1.12.0 is now required to use Bond-over-gRPC.
     * This version include a number of memory leak fixes that users of
       Bond-over-gRPC were encountering. [Issue
-      #810](https://github.com/microsoft/bond/issues/810)
+      \#810](https://github.com/microsoft/bond/issues/810)
     * This version include some Windows-specific performance
       improvements for loopback connections.
 * The `bond::ext::gRPC::wait_callback` has been deprecated in favor of
   additionally generated client functions that return `std::future`.
 * Fixed includes for gRPC services with events or parameterless methods.
-  [Issue #735](https://github.com/microsoft/bond/issues/735)
+  [Issue \#735](https://github.com/microsoft/bond/issues/735)
 * Fixed a bug which would read an unrelated struct's field(s) when
   deserializing a base struct. [Issue
-  #742](https://github.com/microsoft/bond/issues/742)
+  \#742](https://github.com/microsoft/bond/issues/742)
 * Fixed a bug in `bond::MapTo<T>::Field` that failed to pass the `Protocols`
   type parameter to `bond::Apply`.
 * Fixed a race condition when `bond::ext::gRPC::io_manager::shutdown` and
@@ -213,13 +581,13 @@ different versioning scheme, following the Haskell community's
 * Fixed an issue with the `ToString`, `FromString`, `ToEnum` and `FromEnum`
   functions that were previously not exported from a DLL when the
   `--export-attribute` option was passed to `gbc`. [Issue
-  #861](https://github.com/microsoft/bond/issues/861)
+  \#861](https://github.com/microsoft/bond/issues/861)
 * Fixed a bug in `bond::nullable<T, Alloc>` where it was not propagating an
   allocator to `T` when `allocator_type` was not explicitly defined.
 * Fixed a bug in `bond::make_box` where `const T&` was not handled correctly.
 * The use of `bond::check_method` has been replaced with less restricting
   expression SFINAE checks on supported compilers. [Issue
-  #896](https://github.com/microsoft/bond/issues/896)
+  \#896](https://github.com/microsoft/bond/issues/896)
 * Fixed a bug where `bond::ext::gRPC::io_manager` could cause a thread to join
   itself.
 * The preferred namespace for Bond-over-gRPC is now `bond::ext::grpc`. The
@@ -232,7 +600,7 @@ different versioning scheme, following the Haskell community's
 * **Breaking change** The deprecated Bond Comm functionality has been removed.
   This includes all gbc options related to Comm and all Comm APIs, assemblies,
   and NuGet packages. [Issue
-  #824](https://github.com/microsoft/bond/issues/824)
+  \#824](https://github.com/microsoft/bond/issues/824)
 * **Breaking change** The Bond.CSharp and Bond.Compiler.CSharp NuGet packages
   perform implicit codegen when the simplified .NET Core `.csproj` format is
   used. This breaking change *does not* affect projects using the classic
@@ -242,31 +610,31 @@ different versioning scheme, following the Haskell community's
   all implicit inclusion](https://aka.ms/sdkimplicititems). To set per-item
   metadata, use the [item update
   syntax](https://docs.microsoft.com/en-us/visualstudio/msbuild/item-element-msbuild#examples).
-  [Issue #636](https://github.com/microsoft/bond/issues/636)
+  [Issue \#636](https://github.com/microsoft/bond/issues/636)
 * The C# attribute `Bond.Attribute` can now be applied to methods. This fixes
   broken codegen when attributes are used on service methods. [Issue
-  #617](https://github.com/microsoft/bond/issues/617)
+  \#617](https://github.com/microsoft/bond/issues/617)
 * Bond Attributes on service methods are now present on all the client
   overloads for the methods. Previously, just the "friendly" method had the
   attributes.
 * Grpc.Core v1.12.0 is now required to use Bond-over-gRPC.
     * This version include a number of memory leak fixes that users of
       Bond-over-gRPC were encountering. [Issue
-      #810](https://github.com/microsoft/bond/issues/810)
+      \#810](https://github.com/microsoft/bond/issues/810)
     * This version include some Windows-specific performance improvements for
       loopback connections.
 * `BondCodegen` items will now appear in the Visual Studio 2017+ UI in .NET
   Core projects.
 * The .NET Standard assemblies are fully strong-name signed. Previously, they
   were inadvertently only public strong-name signed.
-* The .NET assemblies are now Authenticode dual-signed with both SHA1 and
-  SHA2.
+* The .NET assemblies are now Authenticode dual-signed with both SHA-1 and
+  SHA-2.
 * Fixed a bug in the codegen targets when using `gbc` from $PATH on macOS and
   Linux that prevented the C# compiler from finding the generated C# files.
 * *Preview*: Added preliminary support for generating types with constructors
   with parameters for each field. This functionality will change in the future
   and may be removed. [Pull request
-  #857](https://github.com/microsoft/bond/pull/857)
+  \#857](https://github.com/microsoft/bond/pull/857)
 
 ## 7.0.2: 2017-10-30 ##
 * `gbc` & compiler library: 0.10.1.0
@@ -325,7 +693,7 @@ different versioning scheme, following the Haskell community's
   bond::CoreException is now thrown.
 * Errors from some versions of G++ like "non-template type `Deserialize`
   used as a template" have been fixed.
-  [Issue #538](https://github.com/microsoft/bond/issues/538)
+  [Issue \#538](https://github.com/microsoft/bond/issues/538)
 * Guard against overflows in OutputMemoryStream, blob, and SimpleArray.
 * Use RapidJSON's iterative parser to handle deeply nested JSON data without
   causing a stack overflow.
@@ -362,7 +730,7 @@ different versioning scheme, following the Haskell community's
   about duplicate items. See commit
   [a120cd99](https://github.com/microsoft/bond/commit/a120cd9995d74e11b75766c5195ea4587c304dd7#diff-3b0b4bed9029ae89dbfb824ce7eff5e8R54)
   for an example of how to fix this.
-  [Issue #448](https://github.com/microsoft/bond/issues/448)
+  [Issue \#448](https://github.com/microsoft/bond/issues/448)
 * **Breaking change** The low-level API `IParser.ContainerHandler` now has an
   `arraySegment` parameter for the converted blob.
 * The code generation MSBuild targets will now skip compiling the
@@ -375,17 +743,17 @@ different versioning scheme, following the Haskell community's
 * `Bond.IO.Unsafe.InputStream` can now be used with streams that do not
   implement [`Stream.Seek`][msdn-stream-seek], like
   [`System.IO.Compression.GzipStream`][msdn-gzipstream].
-  [Issue #498](https://github.com/microsoft/bond/issues/498)
+  [Issue \#498](https://github.com/microsoft/bond/issues/498)
     * Such streams are detected by inspecting
       [`Stream.CanSeek`][msdn-stream-canseek].
 * Fix a bug in CompactBinaryWriter when using v2 that repeated first pass
   when a bonded field was serailized, resulting in extra work and extra
   state left in the CompactBinaryWriter.
 * Apply IDL annotations to services and methods for gRPC.
-  [Issue #617](https://github.com/microsoft/bond/issues/617)
+  [Issue \#617](https://github.com/microsoft/bond/issues/617)
 * Fixed a bug that produced C# code that couldn't be compiled when using
   Bond-over-gRPC with a generic type instantiated with a collection.
-  [Issue #623](https://github.com/microsoft/bond/issues/623)
+  [Issue \#623](https://github.com/microsoft/bond/issues/623)
 * When targeting .NET 4.5, avoid resolving external entities when using
   `SimpleXmlReader`.
 * Remove redundant conversions during serialization of aliased blobs.
@@ -400,7 +768,7 @@ different versioning scheme, following the Haskell community's
 
 ## 6.0.1 ##
 
-This version was not used.
+This version was allocated but never released.
 
 ## 6.0.0: 2017-06-29 ##
 * `gbc` & compiler library: 0.10.0.0
@@ -486,19 +854,19 @@ This version was not used.
   distribution of Bond will continue to be
   [Authenticode signed](https://msdn.microsoft.com/en-us/library/ms537361(v=vs.85).aspx)
   with a Microsoft certificate.
-  [Issue #414](https://github.com/microsoft/bond/issues/414)
+  [Issue \#414](https://github.com/microsoft/bond/issues/414)
     * The new public key for assemblies is now
       `00240000048000009400000006020000002400005253413100040000010001000d504ac18b4b149d2f7b0059b482f9b6d44d39059e6a96ff0a2a52678b5cfd8567cc67254132cd2debb5b95f6a1206a15c6f8ddac137c6c3ef4995f28c359acaa683a90995c8f08df7ce0aaa8836d331a344a514c443f112f80bf2ebed40ccb32d7df63c09b0d7bef80aecdc23ec200a458d4f8bafbcdeb9bf5ba111fbbd4787`
 * **Breaking change** Bond assemblies now have assembly and file versions
   that correspond to their NuGet package version. Strong name identities
   will now change release-over-release in line with the NuGet package
-  versions. [Issue #325](https://github.com/microsoft/bond/issues/325)
+  versions. [Issue \#325](https://github.com/microsoft/bond/issues/325)
 * The codegen MSBuild targets will now re-run codegen if gbc itself has been
   changed.
 * Fixed a bug where JSON and XML protocols would permit the serialization of
   non-nullable string fields that were set to null instead of throwing a
   NullReferenceException.
-  [Issue #417](https://github.com/microsoft/bond/issues/417)
+  [Issue \#417](https://github.com/microsoft/bond/issues/417)
 
 ## 5.3.1: 2017-04-25 ##
 
@@ -528,7 +896,7 @@ This version was not used.
 * When generating C++ apply files, there are now explicit `bond::Apply<>`
   instantiations for `CompactBinaryWriter<OutputCounter>` and
   `SimpleBinaryWriter<Null>` writers.
-  [Pull request #373](https://github.com/microsoft/bond/pull/373)
+  [Pull request \#373](https://github.com/microsoft/bond/pull/373)
     * **Breaking change (Haskell library only):**
       `Language.Bond.Codegen.Cpp.ApplyOverloads.Protocol` is now a union of
       `ProtocolReader` and `ProtocolWriter` to permit mixing and matching of
@@ -537,7 +905,7 @@ This version was not used.
 * Add gbc flags to pick which C# files to generate (structs, gRPC, and
   comm). Only structs are generated by default.
 * gbc ensures that method names are unique within a service.
-  [Issue #381](https://github.com/microsoft/bond/issues/381)
+  [Issue \#381](https://github.com/microsoft/bond/issues/381)
 
 ### C++ ###
 
@@ -552,16 +920,16 @@ This version was not used.
   itself. warning.h is still in place on MSVC12; furthermore, we don't alter
   warning.h for now as it may be depended upon by application code.
 * Avoid unaligned memory access on non-x86/x64 platforms.
-  [Issue #305](https://github.com/microsoft/bond/issues/305)
+  [Issue \#305](https://github.com/microsoft/bond/issues/305)
 * Improve compliance with strict-aliasing rules.
     * Bond now builds on Clang/GCC with `-fstrict-aliasing`.
 * When generating C++ apply files, there are now explicit `bond::Apply<>`
   instantiations for `CompactBinaryWriter<OutputCounter>` and
   `SimpleBinaryWriter<Null>` writers.
-  [Pull request #373](https://github.com/microsoft/bond/pull/373)
+  [Pull request \#373](https://github.com/microsoft/bond/pull/373)
 * Improve C++ allocator support
-  [Issue #379](https://github.com/microsoft/bond/issues/379)
-  [Pull request #380](https://github.com/microsoft/bond/pull/380)
+  [Issue \#379](https://github.com/microsoft/bond/issues/379)
+  [Pull request \#380](https://github.com/microsoft/bond/pull/380)
     * Support C++11 and above allocator model for rebind
     * Simplify detection of the default allocator
 * Remove per-field instantiation of DynamicParser<>::UnknownFieldOrTypeMismatch method.
@@ -573,13 +941,13 @@ This version was not used.
 * Added controls to cap incremental allocation between reads in
   `Bond.IO.Unsafe.InputStream`.
 * Extended fix for bug parsing JSON when a string value is a date.
-  [Pull request #358](https://github.com/microsoft/bond/pull/358)
+  [Pull request \#358](https://github.com/microsoft/bond/pull/358)
 * Bond C# 5.1.0 accidentally broke backward compability by renaming
   `Bond.Reflection` to `Bond.BondReflection`. This has been fixed:
   `Bond.BondReflection` was unrenamed back to `Bond.Reflection`, and a shim
   `Bond.BondReflection` type now redirects all calls to their original names
   to minimize further breakage.
-  [Issue #369](https://github.com/microsoft/bond/issues/369)
+  [Issue \#369](https://github.com/microsoft/bond/issues/369)
     * Code that started using `Bond.BondReflection` by name will encounter
       warning CS0618 indicating use of an obselete method/type. To fix this,
       use the original name `Bond.Reflection`. This warning can be
@@ -616,20 +984,20 @@ This version was not used.
 * Add export-attribute option for C++ and make apply-attribute a
   deprecated synonym for export-attribute
 * Fix C++ Comm build problems when services are shared via DLL.
-  [Issue #314](https://github.com/microsoft/bond/issues/314)
+  [Issue \#314](https://github.com/microsoft/bond/issues/314)
 
 ### C++ ###
 
 * Fixed compatibility with RapidJSON v1.1.0.
-  [Issue #271](https://github.com/microsoft/bond/issues/271)
+  [Issue \#271](https://github.com/microsoft/bond/issues/271)
 * The minimum supported version of Boost is now 1.58
 * The `bf` utility now supports multiple payloads.
-  [Pull request #288](https://github.com/microsoft/bond/pull/288)
+  [Pull request \#288](https://github.com/microsoft/bond/pull/288)
 * Fixed an issue with aliased enums.
-  [Pull request #288](https://github.com/microsoft/bond/pull/298)
+  [Pull request \#288](https://github.com/microsoft/bond/pull/298)
 * Fixed an issue with template parameter deduction in `bond::is_nullable`
   that occurs with Microsoft Visual C++ 2015 Update 3.
-  [Issue #306](https://github.com/microsoft/bond/issues/306)
+  [Issue \#306](https://github.com/microsoft/bond/issues/306)
 
 ### C++ Comm ###
 * Fixed a multiply-defined symbol linker error for
@@ -640,7 +1008,7 @@ This version was not used.
 * Added controls to cap pre-allocation during deserialization of containers
   and blobs.
 * Fixed computation of default value for aliased bool and wstring fields.
-  [Issue #300](https://github.com/microsoft/bond/issue/300)
+  [Issue \#300](https://github.com/microsoft/bond/issue/300)
 
 ### C# Comm ###
 
@@ -673,7 +1041,7 @@ This version was not used.
 * Bond C# now supports
   [.NET Standard 1.0, 1.3, and 1.6](https://blogs.msdn.microsoft.com/dotnet/2016/09/26/introducing-net-standard/),
   so you can use Bond in .NET Core applications.
-  [Pull request #243](https://github.com/microsoft/bond/pull/243)
+  [Pull request \#243](https://github.com/microsoft/bond/pull/243)
     * Not all assemblies work with all versions of the .NET Standard or on
       all platforms. The
       [manual](https://microsoft.github.io/bond/manual/bond_cs.html#frameworks-targeted)
@@ -721,7 +1089,7 @@ This version was not used.
 * **Breaking change:** `bond.TypeDef.list_sub_type` field removed, as it was
   breaking some consumers of serialized SchemaDef. We plan to restore this
   field in the future.
-  [Issue #161 re-opened](https://github.com/microsoft/bond/issues/161)
+  [Issue \#161 re-opened](https://github.com/microsoft/bond/issues/161)
 
 ### IDL comm ###
 * Update IDL to conform to naming conventions.
@@ -731,7 +1099,7 @@ This version was not used.
 * **Breaking change:** Runtime SchemaDef `list_sub_type` field removed, as
   it was breaking some consumers of serialized SchemaDef. We plan to restore
   this field in the future.
-  [Issue #161 re-opened](https://github.com/microsoft/bond/issues/161)
+  [Issue \#161 re-opened](https://github.com/microsoft/bond/issues/161)
 * Generated enum types now have a `FromEnum` method that can be used to
   convert from an enum value to a string. Now generated enum types have all
   four of `ToEnum`, `FromEnum`, `ToString`, and `FromString`. (The `...Enum`
@@ -741,10 +1109,10 @@ This version was not used.
 * **Breaking change:** Runtime SchemaDef `list_sub_type` field removed, as
   it was breaking some consumers of serialized SchemaDef. We plan to restore
   this field in the future.
-  [Issue #161 re-opened](https://github.com/microsoft/bond/issues/161)
+  [Issue \#161 re-opened](https://github.com/microsoft/bond/issues/161)
 * The Bond.Runtime NuGet package no longer artificially limits
   Newtonsoft.Json to versions before 10.
-  [Issue #212](https://github.com/microsoft/bond/issues/212)
+  [Issue \#212](https://github.com/microsoft/bond/issues/212)
 
 ### C# Comm ###
 * `EpoxyListeners` can now be configured to require clients to authenticate
@@ -767,46 +1135,46 @@ This version was not used.
 
 * **Breaking change:** Runtime SchemaDef now includes information about
   whether BT_LIST fields are nullable or blobs.
-  [Issue #161](https://github.com/microsoft/bond/issues/161)
+  [Issue \#161](https://github.com/microsoft/bond/issues/161)
 * User-defined `TypeMapping`s can now be created. This makes is easier to
   implement code generation for new languages. [Pull request
-  #172](https://github.com/microsoft/bond/pull/172)
+  \#172](https://github.com/microsoft/bond/pull/172)
 * Validate default value type mistmatches.
-  [Issue #72](https://github.com/microsoft/bond/issues/72)
-  [Issue #128](https://github.com/microsoft/bond/issues/128)
+  [Issue \#72](https://github.com/microsoft/bond/issues/72)
+  [Issue \#128](https://github.com/microsoft/bond/issues/128)
 * Validate default value out-of-range values.
-  [Issue #73](https://github.com/microsoft/bond/issues/73)
+  [Issue \#73](https://github.com/microsoft/bond/issues/73)
 * Fail when struct field has default value of `nothing`.
-  [Issue #164](https://github.com/microsoft/bond/issues/164)
+  [Issue \#164](https://github.com/microsoft/bond/issues/164)
 * Fail when enum field doesn't have default value.
-  [Issue #177](https://github.com/microsoft/bond/issues/177)
+  [Issue \#177](https://github.com/microsoft/bond/issues/177)
 * Validate default value of type aliases
 * Generated types will used `= default` move constructors if possible. This
   results in many generated types having `noexcept` move constructors.
 * Fix a bug where, if a Bond namespace contained a struct and an enum value with
   the same name, generated C++ would contain ambiguous references.
-  [Issue #202](https://github.com/microsoft/bond/issues/202)
+  [Issue \#202](https://github.com/microsoft/bond/issues/202)
 
 ### IDL core ###
 
 * Set up a separate IDL directory so that IDL is independent of language
-  bindings. [Pull request #219](https://github.com/microsoft/bond/pull/219)
+  bindings. [Pull request \#219](https://github.com/microsoft/bond/pull/219)
 
 ### IDL comm ###
 
 * Set up a separate IDL directory so that IDL is independent of language
   bindings. Convert comm IDL files to use C++-style naming convention. [Pull
-  request #219](https://github.com/microsoft/bond/pull/219)
+  request \#219](https://github.com/microsoft/bond/pull/219)
 
 ### C++ ###
 
-* Improvements in the `nullable` implementation. [Pull request #174](https://github.com/microsoft/bond/pull/174)
+* Improvements in the `nullable` implementation. [Pull request \#174](https://github.com/microsoft/bond/pull/174)
     * Correctly use allocator model.
     * Reduce size of `nullable` in the normal case.
     * And others
 * Runtime SchemaDef now includes information about whether BT_LIST fields
   are nullable or blobs.
-  [Issue #161](https://github.com/microsoft/bond/issues/161)
+  [Issue \#161](https://github.com/microsoft/bond/issues/161)
 * The following Bond types have (possibly conditional) `noexcept` move
   constructors: `blob`, `bonded`, `maybe`, `nullable`, `RuntimeSchema`,
   `value`.
@@ -816,7 +1184,7 @@ This version was not used.
 * Bond can now be used with Newtonsoft.Json >= 7.0.1 and < 10
 * Runtime SchemaDef now includes information about whether BT_LIST fields
   are nullable or blobs.
-  [Issue #161](https://github.com/microsoft/bond/issues/161)
+  [Issue \#161](https://github.com/microsoft/bond/issues/161)
 
 ### C# Comm ###
 
@@ -861,7 +1229,7 @@ This version was not used.
       [methods](https://microsoft.github.io/bond/manual/compiler.html#methods)
       have been added to the compiler AST.
 * MSBuild-compatible error messages.
-  [Issue #136](https://github.com/microsoft/bond/issues/136)
+  [Issue \#136](https://github.com/microsoft/bond/issues/136)
 
 ### C# ###
 
@@ -889,7 +1257,7 @@ This version was not used.
 ### C# ###
 
 * Add support for Compact Binary v2 writing.
-  [Issue #70](https://github.com/microsoft/bond/issues/70)
+  [Issue \#70](https://github.com/microsoft/bond/issues/70)
 
 ## 4.1.0: 2016-04-22
 
@@ -899,11 +1267,11 @@ This version was not used.
 ### `gbc` ###
 
 * Field ordinals larger than 65535 are now rejected.
-  [Issue #111](https://github.com/microsoft/bond/issues/111)
+  [Issue \#111](https://github.com/microsoft/bond/issues/111)
 * Fields that duplicate the name of an existing field are now rejected.
-  [Issue #123](https://github.com/microsoft/bond/issues/123)
+  [Issue \#123](https://github.com/microsoft/bond/issues/123)
 * The generated C# code now compiles with no errors or warnings at
-  `/warn:4`. [Issue #82](https://github.com/microsoft/bond/issues/82)
+  `/warn:4`. [Issue \#82](https://github.com/microsoft/bond/issues/82)
 * Added
   [Visual Studio Code highlighting rules for `.bond` files](https://github.com/microsoft/bond/tree/b2b9cd7256286fd484444dfaf7645d380a3ee936/tools/syntax/VsCode).
 
@@ -916,16 +1284,16 @@ This version was not used.
 ### C# ###
 
 * The generated C# code now compiles with no errors or warnings at
-  `/warn:4`. [Issue #82](https://github.com/microsoft/bond/issues/82)
+  `/warn:4`. [Issue \#82](https://github.com/microsoft/bond/issues/82)
 * Bond-generated enums constants are now cast to 32-bit integers to avoid
   some compiler warnings.
 * [Implicit conversion between `bond.GUID` and `System.Guid`](https://github.com/microsoft/bond/blob/bc4c56a3ca0858f4bd93916e80ceff9bbeada606/cs/test/core/GuidConversionTests.cs#L14)
   has been added.
-  [Pull request #145](https://github.com/microsoft/bond/pull/145)
+  [Pull request \#145](https://github.com/microsoft/bond/pull/145)
 * The ability to
   [customize the implementation of `IBonded<T>` used](https://microsoft.github.io/bond/manual/bond_cs.html#understanding-bondedt)
   has been added.
-  [Pull request #153](https://github.com/microsoft/bond/pull/153)
+  [Pull request \#153](https://github.com/microsoft/bond/pull/153)
 
 ## 4.0.2: 2015-12-14
 
@@ -944,8 +1312,8 @@ This version was not used.
   This can be used to speed up the time to create the serializer for very
   complex schemas.
 * Fix for rare buffer corruption in InputStream.
-  [Issue #114](https://github.com/microsoft/bond/issues/114).
-* Fix for SimpleXmlParser not handling XML declarations. [Issue #112](https://github.com/microsoft/bond/issues/82)
+  [Issue \#114](https://github.com/microsoft/bond/issues/114).
+* Fix for SimpleXmlParser not handling XML declarations. [Issue \#112](https://github.com/microsoft/bond/issues/82)
 
 ## Breaking changes between 3.x and 4.x ##
 

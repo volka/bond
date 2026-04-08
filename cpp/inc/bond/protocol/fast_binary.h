@@ -9,6 +9,7 @@
 
 #include <bond/core/bond_version.h>
 #include <bond/core/detail/checked.h>
+#include <bond/core/detail/recursionguard.h>
 
 #include <boost/call_traits.hpp>
 #include <boost/noncopyable.hpp>
@@ -180,6 +181,12 @@ public:
         uint32_t length = 0;
 
         ReadVariableUnsigned(_input, length);
+
+        constexpr uint8_t charSize = static_cast<uint8_t>(sizeof(typename detail::string_char_int_type<T>::type));
+        uint32_t numStringBytes = detail::checked_multiply(length, charSize);
+        if (!_input.CanRead(numStringBytes))
+            OutOfBoundStringSizeException();
+
         detail::ReadStringData(_input, value, length);
     }
 
@@ -188,6 +195,32 @@ public:
     void Read(blob& value, uint32_t size)
     {
         _input.Read(value, size);
+    }
+
+    // Does the reader have enough input buffer left to read an array of T?
+    template<typename T>
+    bool CanReadArray(uint32_t num_elems)
+    {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4127)
+#endif
+
+        BOND_IF_CONSTEXPR(is_string_type<T>::value)
+        {
+            return _input.CanRead(num_elems);
+        }
+        else
+        {
+            // We will need to read num_elems instances of T. This will not overflow because
+            // num_elems < 2^32 and we call this only for primitive types, so sizeof(T) <= 8.
+            uint64_t num_bytes = static_cast<uint64_t>(num_elems) * sizeof(T);
+            return (num_bytes >> 32 == 0) && _input.CanRead(num_bytes & 0xffffffff);
+            }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     }
 
     void ReadStructBegin()
@@ -260,12 +293,7 @@ protected:
         type = static_cast<BondDataType>(byte);
     }
 
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-    // Using BondDataType directly in non-trivial boolean template checks fails on VC12.
-    using BT = std::underlying_type<BondDataType>::type;
-#else
     using BT = BondDataType;
-#endif
 
     template <BT T>
     typename boost::enable_if_c<(T == BT_BOOL || T == BT_UINT8 || T == BT_INT8)>::type
@@ -333,6 +361,8 @@ protected:
     typename boost::enable_if_c<(T == BT_STRUCT)>::type
     SkipType()
     {
+        bond::detail::RecursionGuard guard;
+
         for (;;)
         {
             ReadStructBegin();
@@ -361,6 +391,8 @@ protected:
         BondDataType element_type;
         uint32_t size;
 
+        bond::detail::RecursionGuard guard;
+
         ReadContainerBegin(size, element_type);
         SkipType(element_type, size);
         ReadContainerEnd();
@@ -372,6 +404,8 @@ protected:
     {
         std::pair<BondDataType, BondDataType> element_type;
         uint32_t size;
+
+        bond::detail::RecursionGuard guard;
 
         ReadContainerBegin(size, element_type);
         for (int64_t i = 0; i < size; ++i)
@@ -449,6 +483,7 @@ protected:
                 break;
 
             default:
+                bond::UnknownDataTypeException();
                 break;
         }
     }
@@ -576,4 +611,4 @@ protected:
 };
 
 
-} // namespace bond
+}; // namespace bond

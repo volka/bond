@@ -91,10 +91,6 @@ struct VariableUnsignedUnchecked<uint64_t, 56>
 class InputBuffer
 {
 public:
-#if defined(_MSC_VER) && _MSC_VER < 1900
-    using range_type = blob;
-#endif
-
     /// @brief Default constructor
     InputBuffer()
         : _pointer()
@@ -198,7 +194,7 @@ public:
     {
         if (size > _blob.length() - _pointer)
         {
-            return;
+            EofException(size);
         }
 
         _pointer += size;
@@ -210,6 +206,11 @@ public:
         return _pointer == _blob.length();
     }
 
+    /// @brief Check if the stream can read at least @size bytes before encountering end of stream.
+    bool CanRead(uint32_t size) const
+    {
+        return size <= _blob.length() - _pointer;
+    }
 
     template <typename T>
     void ReadVariableUnsigned(T& value)
@@ -227,10 +228,10 @@ public:
     }
 
 protected:
-    BOND_NORETURN void EofException(uint32_t size) const
+    [[noreturn]] void EofException(uint32_t size) const
     {
         BOND_THROW(StreamException,
-              "Read out of bounds: " << size << " bytes requested, offset: "
+              "Read or skip out of bounds: " << size << " bytes requested, offset: "
               << _pointer << ", length: " << _blob.length());
     }
 

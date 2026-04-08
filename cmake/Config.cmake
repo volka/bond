@@ -34,10 +34,6 @@ endif()
 if (MSVC)
     # MSVC needs this because of how template-heavy our code is.
     add_compile_options (/bigobj)
-    # inject disabling of some MSVC warnings for versions prior to MSVC14
-    if (MSVC_VERSION LESS 1900)
-        add_compile_options (/FIbond/core/warning.h)
-    endif()
     # turn up warning level
     add_compile_options (/W4 /WX /sdl)
     # Enable SDL recommended warnings that aren't enabled by /W4
@@ -78,20 +74,6 @@ if (WIN32)
         PATHS
             "${CMAKE_CURRENT_SOURCE_DIR}/cs/test/compat/core/bin/debug"
             "${CMAKE_CURRENT_SOURCE_DIR}/cs/test/compat/core/bin/retail")
-
-    find_program (BOND_CSHARP_GRPC_COMPAT_SERVER GrpcCompatServer.exe
-        PATH_SUFFIXES net45
-        NO_DEFAULT_PATH
-        PATHS
-            "${CMAKE_CURRENT_SOURCE_DIR}/cs/test/compat/grpc/server/bin/debug"
-            "${CMAKE_CURRENT_SOURCE_DIR}/cs/test/compat/grpc/server/bin/retail")
-
-    find_program (BOND_CSHARP_GRPC_COMPAT_CLIENT GrpcCompatClient.exe
-        PATH_SUFFIXES net45
-        NO_DEFAULT_PATH
-        PATHS
-            "${CMAKE_CURRENT_SOURCE_DIR}/cs/test/compat/grpc/client/bin/debug"
-            "${CMAKE_CURRENT_SOURCE_DIR}/cs/test/compat/grpc/client/bin/retail")
 endif()
 
 # find Java libraries and programs
@@ -167,6 +149,8 @@ cxx_add_compile_options(AppleClang
     --std=c++11
     -Wall
     -Werror
+    # Suppress warnings in Boost about using deprecated types like std::auto_ptr
+    -Wno-deprecated-declarations
     -Wno-null-dereference
     -Wno-unknown-warning-option
     -Wno-unused-local-typedefs)
@@ -222,7 +206,3 @@ set (BOND_SKIP_COMPAT_TESTS
 set (BOND_STACK_OPTIONS
     ""
     CACHE STRING "Options to pass to Haskell Stack")
-
-if (BOND_ENABLE_GRPC AND ((CXX_STANDARD LESS 11) OR (MSVC_VERSION LESS 1800)))
-    message(FATAL_ERROR "BOND_ENABLE_GRPC is TRUE but compiler specified does not support C++11 standard")
-endif()

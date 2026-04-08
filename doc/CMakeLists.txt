@@ -1,5 +1,7 @@
 cmake_minimum_required (VERSION 2.8.12)
 
+project (BondDoc)
+
 set (CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
 
@@ -41,7 +43,7 @@ function (add_pandoc_markdown)
     endif()
     set (inputs "${arg_UNPARSED_ARGUMENTS}")
     foreach (file ${inputs})
-        get_filename_component (name ${file} NAME_WE)
+        get_filename_component (name ${file} NAME_WLE)
         if (arg_OUTPUT_NAME)
             set (outputName ${arg_OUTPUT_NAME})
         else()
@@ -88,10 +90,6 @@ if (Haskell_PANDOC_EXECUTABLE AND Doxygen_EXECUTABLE)
         OPTIONS --self-contained --table-of-contents
         OUTPUT_DIR manual)
 
-    add_pandoc_markdown(src/bond_over_grpc.md
-        OPTIONS --self-contained --table-of-contents
-        OUTPUT_DIR manual)
-
     add_pandoc_markdown (src/bond_cs.md
         CODE "numberLines"
         OPTIONS --table-of-contents
@@ -111,6 +109,9 @@ if (Haskell_PANDOC_EXECUTABLE AND Doxygen_EXECUTABLE)
         OUTPUT_NAME index
         OPTIONS --table-of-contents "--title-prefix=Bond, Microsoft's cross-platform framework for working with schematized data")
 
+    add_pandoc_markdown (../README.old.md
+        OPTIONS --table-of-contents "--title-prefix=Bond, Microsoft's cross-platform framework for working with schematized data")
+
     add_pandoc_markdown (src/why_bond.md
         OPTIONS --self-contained --table-of-contents)
 
@@ -121,7 +122,6 @@ if (Haskell_PANDOC_EXECUTABLE AND Doxygen_EXECUTABLE)
         doxygen/bond_layout.xml
         doxygen/bond_reference.css
         doxygen/mainpage.md
-        doxygen/examples/wait_callback_example.cpp
         ${cpp_headers})
 
     set (doxygen_output_dir

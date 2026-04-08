@@ -17,6 +17,18 @@ enum EnumType1
 };
 
 
+struct SimpleOptionals
+{
+    0: int8 a;
+    1: int8 b;
+    2: int8 c;
+};
+
+struct SimpleOptionalsView view_of SimpleOptionals
+{
+    b;
+};
+
 struct SimpleStruct
 {
     0: required_optional bool m_bool;
@@ -205,3 +217,9 @@ struct NestedListsStruct
     10: required_optional  map<int64, list<string>>        m64ls;
     11: required_optional  vector<map<double, string>>     vmds;
 };
+
+struct StructWithRecursiveReference
+{
+    0: uint32 Value;
+    1: nullable<StructWithRecursiveReference> Child;
+}

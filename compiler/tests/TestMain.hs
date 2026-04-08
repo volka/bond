@@ -76,6 +76,7 @@ tests = testGroup "Compiler tests"
             , verifyCppCodegen "aliases"
             , verifyCppCodegen "alias_key"
             , verifyCppCodegen "maybe_blob"
+            , verifyCppCodegen "metadata_edge_cases"
             , verifyCodegen
                 [ "c++"
                 , "--enum-header"
@@ -123,11 +124,6 @@ tests = testGroup "Compiler tests"
                     [ "c++"
                     , "--export-attribute=DllExport"
                     ]
-                    "service"
-                , verifyExportsCodegen
-                    [ "c++"
-                    , "--export-attribute=DllExport"
-                    ]
                     "with_enum_header"
                 ]
             , verifyCodegen
@@ -135,20 +131,6 @@ tests = testGroup "Compiler tests"
                 , "--namespace=tests=nsmapped"
                 ]
                 "basic_types_nsmapped"
-            , testGroup "Grpc"
-                [ verifyCppGrpcCodegen
-                    [ "c++"
-                    ]
-                    "service"
-                , verifyCppGrpcCodegen
-                    [ "c++"
-                    ]
-                    "generic_service"
-                , verifyCppGrpcCodegen
-                    [ "c++"
-                    ]
-                    "service_attributes"
-                ]
             ]
         , testGroup "C#"
             [ verifyCsCodegen "attributes"
@@ -162,6 +144,16 @@ tests = testGroup "Compiler tests"
             , verifyCsCodegen "inheritance"
             , verifyCsCodegen "aliases"
             , verifyCsCodegen "complex_inheritance"
+            , verifyCodegen
+                [ "c#"
+                , "--using=ImmutableArray=System.Collections.Immutable.ImmutableArray<{0}>"
+                , "--using=ImmutableList=System.Collections.Immutable.ImmutableList<{0}>"
+                , "--using=ImmutableHashSet=System.Collections.Immutable.ImmutableHashSet<{0}>"
+                , "--using=ImmutableSortedSet=System.Collections.Immutable.ImmutableSortedSet<{0}>"
+                , "--using=ImmutableDictionary=System.Collections.Immutable.ImmutableDictionary<{0},{1}>"
+                , "--using=ImmutableSortedDictionary=System.Collections.Immutable.ImmutableSortedDictionary<{0},{1}>"
+                ]
+                "immutable_collections"
             , verifyCodegenVariation
                 [ "c#"
                 , "--preview-constructor-parameters"
@@ -191,24 +183,13 @@ tests = testGroup "Compiler tests"
                  , "--import-dir=tests/schema/imports"
                  ]
                  "import"
-            , testGroup "Grpc"
-                [ verifyCsGrpcCodegen
-                    [ "c#"
-                    ]
-                    "service"
-                , verifyCsGrpcCodegen
-                    [ "c#"
-                    ]
-                    "generic_service"
-                , verifyCsGrpcCodegen
-                    [ "c#"
-                    ]
-                    "service_attributes"
-                , verifyCsGrpcCodegen
-                    [ "c#"
-                    ]
-                    "streaming"
+            , verifyCodegenVariation
+                [ "c#"
+                , "--preview-constructor-parameters"
+                , "--readonly-properties"
                 ]
+                "empty_struct"
+                "constructor-parameters"
             ]
         , testGroup "Java"
             [ verifyJavaCodegen "attributes"

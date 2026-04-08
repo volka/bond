@@ -5,8 +5,54 @@
 
 #include <bond/core/config.h>
 
+#include <bond/core/blob.h>
+#include <bond/core/reflection.h>
+
+#include <boost/utility/enable_if.hpp>
+
 namespace bond
 {
+
+namespace detail
+{
+// The following control which containers will be preallocated when deserializing
+// and which require incrementally adding items so that a large size in a payload 
+// doesn't cause a large memory allocation.
+template <typename TContainer, typename TElement, typename Enable = void> 
+struct is_deserialize_direct
+    : std::false_type {};
+
+template <typename TContainer, typename TElement> 
+struct is_deserialize_direct<TContainer, TElement,
+    typename boost::enable_if_c<require_modify_element<TContainer>::value
+    && is_element_matching<TElement, TContainer>::value>::type>
+    : std::true_type {};
+
+template <typename TContainer, typename TElement> 
+struct is_deserialize_direct<TContainer, TElement,
+    typename boost::enable_if_c<is_list_container<TContainer>::value
+    && !is_nullable<TContainer>::value
+    && is_basic_type<typename remove_bonded_value<TElement>::type>::value
+    && !require_modify_element<TContainer>::value
+    && is_element_matching<TElement, TContainer>::value>::type>
+    : std::true_type {};
+
+template <typename TContainer, typename TElement, typename Enable = void> 
+struct is_deserialize_incremental
+    : std::false_type {};
+
+template <typename TElement>
+struct is_deserialize_incremental<nullable<TElement>, TElement>
+    : std::false_type {};
+
+template <typename TContainer, typename TElement> 
+struct is_deserialize_incremental<TContainer, TElement,
+    typename boost::enable_if_c<is_list_container<TContainer>::value
+    && !is_basic_type<typename remove_bonded_value<TElement>::type>::value
+    && is_element_matching<TElement, TContainer>::value
+    && !require_modify_element<TContainer>::value>::type>
+        : std::true_type {};
+};
 
 template <typename Protocols, typename X, typename Key, typename T>
 typename boost::enable_if<is_map_key_matching<Key, X> >::type
@@ -20,13 +66,16 @@ template <typename Protocols, typename Transform, typename Key, typename T>
 inline void DeserializeMapElements(const Transform& transform, const Key& key, const T& element, uint32_t size);
 
 template <typename Protocols, typename X, typename T>
-typename boost::enable_if_c<is_list_container<X>::value
-                         && is_element_matching<T, X>::value>::type
+typename boost::enable_if_c<detail::is_deserialize_direct<X, T>::value>::type
 inline DeserializeElements(X& var, const T& element, uint32_t size);
 
 template <typename Protocols, typename X, typename T>
-typename boost::enable_if<is_matching<T, X> >::type
+typename boost::enable_if_c<is_matching<T, X>::value>::type
 inline DeserializeElements(nullable<X>& var, const T& element, uint32_t size);
+
+template <typename Protocols, typename X, typename T>
+typename boost::enable_if_c<detail::is_deserialize_incremental<X, T>::value>::type
+inline DeserializeElements(X& var, const T& element, uint32_t size);
 
 template <typename Protocols, typename Reader>
 inline void DeserializeElements(blob& var, const value<blob::value_type, Reader&>& element, uint32_t size);
@@ -37,11 +86,11 @@ typename boost::enable_if_c<is_set_container<X>::value
 inline DeserializeElements(X& var, const T& element, uint32_t size);
 
 template <typename Protocols, typename X, typename T>
-typename boost::disable_if<is_element_matching<T, X> >::type
+typename boost::enable_if_c<!is_element_matching<T, X>::value >::type
 inline DeserializeElements(X&, const T& element, uint32_t size);
 
 template <typename Protocols, typename Transform, typename T>
-inline void DeserializeElements(const Transform& transform, const T& element, uint32_t size);
+void inline DeserializeElements(const Transform& transform, const T& element, uint32_t size);
 
 namespace detail
 {
@@ -152,6 +201,23 @@ inline bool BasicTypeField(uint16_t id, const Metadata& metadata, BondDataType t
 }
 
 
+template <typename Reader, typename T = uint8_t>
+inline void CheckInputData(Reader& input, uint32_t size)
+{
+    if (!input.template CanReadArray<T>(size))
+    {
+        OutOfBoundObjectSizeException();
+    }
+}
+
+template <typename Protocols, typename T, typename E, typename Reader>
+inline void DeserializeElementsChecked(T& var, Reader& input, uint32_t size)
+{
+    CheckInputData<Reader, E>(input, size);
+    return DeserializeElements<Protocols>(var, value<E, Reader&>(input, false), size);
+}
+
+
 template <typename Protocols, typename T, typename Reader>
 inline void BasicTypeContainer(T& var, BondDataType type, Reader& input, uint32_t size)
 {
@@ -160,43 +226,43 @@ inline void BasicTypeContainer(T& var, BondDataType type, Reader& input, uint32_
     switch (type)
     {
         case bond::BT_BOOL:
-            return DeserializeElements<Protocols>(var, value<bool, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, bool, Reader>(var, input, size);
 
         case bond::BT_UINT8:
-            return DeserializeElements<Protocols>(var, value<uint8_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint8_t, Reader>(var, input, size);
 
         case bond::BT_UINT16:
-            return DeserializeElements<Protocols>(var, value<uint16_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint16_t, Reader>(var, input, size);
 
         case bond::BT_UINT32:
-            return DeserializeElements<Protocols>(var, value<uint32_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint32_t, Reader>(var, input, size);
 
         case bond::BT_UINT64:
-            return DeserializeElements<Protocols>(var, value<uint64_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint64_t, Reader>(var, input, size);
 
         case bond::BT_FLOAT:
-            return DeserializeElements<Protocols>(var, value<float, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, float, Reader>(var, input, size);
 
         case bond::BT_DOUBLE:
-            return DeserializeElements<Protocols>(var, value<double, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, double, Reader>(var, input, size);
 
         case bond::BT_STRING:
-            return DeserializeElements<Protocols>(var, value<std::string, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, std::string, Reader>(var, input, size);
 
         case bond::BT_WSTRING:
-            return DeserializeElements<Protocols>(var, value<std::wstring, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, std::wstring, Reader>(var, input, size);
 
         case bond::BT_INT8:
-            return DeserializeElements<Protocols>(var, value<int8_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int8_t, Reader>(var, input, size);
 
         case bond::BT_INT16:
-            return DeserializeElements<Protocols>(var, value<int16_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int16_t, Reader>(var, input, size);
 
         case bond::BT_INT32:
-            return DeserializeElements<Protocols>(var, value<int32_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int32_t, Reader>(var, input, size);
 
         case bond::BT_INT64:
-            return DeserializeElements<Protocols>(var, value<int64_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int64_t, Reader>(var, input, size);
 
         default:
             BOOST_ASSERT(false);
@@ -227,7 +293,7 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
 {
     if (type == get_type_id<typename element_type<T>::type>::value)
     {
-        DeserializeElements<Protocols>(var, value<typename element_type<T>::type, Reader&>(input, false), size);
+        DeserializeElementsChecked<Protocols, T, typename element_type<T>::type, Reader>(var, input, size);
     }
     else
     {
@@ -245,7 +311,7 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
     switch (type)
     {
         case bond::BT_BOOL:
-            return DeserializeElements<Protocols>(var, value<bool, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, bool, Reader>(var, input, size);
 
         default:
             BOOST_ASSERT(!IsMatching<typename element_type<T>::type>(type));
@@ -263,7 +329,7 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
     switch (type)
     {
         case bond::BT_STRING:
-            return DeserializeElements<Protocols>(var, value<std::string, Reader&>(input, false), size);
+            return DeserializeElementsChecked < Protocols, T, std::string, Reader > (var, input, size);
 
         default:
             BOOST_ASSERT(!IsMatching<typename element_type<T>::type>(type));
@@ -281,7 +347,7 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
     switch (type)
     {
         case bond::BT_WSTRING:
-            return DeserializeElements<Protocols>(var, value<std::wstring, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, std::wstring, Reader>(var, input, size);
 
         default:
             BOOST_ASSERT(!IsMatching<typename element_type<T>::type>(type));
@@ -299,10 +365,10 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
     switch (type)
     {
         case bond::BT_FLOAT:
-            return DeserializeElements<Protocols>(var, value<float, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, float, Reader>(var, input, size);
 
         case bond::BT_DOUBLE:
-            return DeserializeElements<Protocols>(var, value<double, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, double, Reader>(var, input, size);
 
         default:
             BOOST_ASSERT(!IsMatching<typename element_type<T>::type>(type));
@@ -320,16 +386,16 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
     switch (type)
     {
         case bond::BT_UINT8:
-            return DeserializeElements<Protocols>(var, value<uint8_t, Reader&>(input, false), size);
-
+            return DeserializeElementsChecked<Protocols, T, uint8_t, Reader>(var, input, size);
+ 
         case bond::BT_UINT16:
-            return DeserializeElements<Protocols>(var, value<uint16_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint16_t, Reader>(var, input, size);
 
         case bond::BT_UINT32:
-            return DeserializeElements<Protocols>(var, value<uint32_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint32_t, Reader>(var, input, size);
 
         case bond::BT_UINT64:
-            return DeserializeElements<Protocols>(var, value<uint64_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, uint64_t, Reader>(var, input, size);
 
         default:
             BOOST_ASSERT(!IsMatching<typename element_type<T>::type>(type));
@@ -347,16 +413,16 @@ inline MatchingTypeContainer(T& var, BondDataType type, Reader& input, uint32_t 
     switch (type)
     {
         case bond::BT_INT8:
-            return DeserializeElements<Protocols>(var, value<int8_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int8_t, Reader>(var, input, size);
 
         case bond::BT_INT16:
-            return DeserializeElements<Protocols>(var, value<int16_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int16_t, Reader>(var, input, size);
 
         case bond::BT_INT32:
-            return DeserializeElements<Protocols>(var, value<int32_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int32_t, Reader>(var, input, size);
 
         case bond::BT_INT64:
-            return DeserializeElements<Protocols>(var, value<int64_t, Reader&>(input, false), size);
+            return DeserializeElementsChecked<Protocols, T, int64_t, Reader>(var, input, size);
 
         default:
             BOOST_ASSERT(!IsMatching<typename element_type<T>::type>(type));

@@ -1,5 +1,15 @@
 % A Thorough Guide to Bond for C#
 
+Bond project has ended
+======================
+
+As of March 2025, the Bond open-source project has ended. There will be no
+further activity in this project: no new features, no bug fixes, and,
+importantly, no security fixes.
+
+The documentation as it existed at the time of the end of the project
+follows.
+
 About
 =====
 
@@ -130,7 +140,7 @@ Classes with read-only properties are fully supported by all Bond APIs.
 `--preview-constructor-parameters`
 
 A constructor is generated with a parameter to initialize each of the schema
-fields. This option is typically used in conjunction with 
+fields. This option is typically used in conjunction with
 `--readonly-properties`.  This functionailty is in preview and may change.
 
 `--collection-interfaces`
@@ -321,9 +331,10 @@ consideration about how the change is rolled out:
 These following changes will break wire compatibility and are not recommended:
 
 - Adding or removing `required` fields
-- Incompatible change of field types (any type change *not* covered above); e.g.:
-  `int32` to `string`, `string` to `wstring`
-- Changing of field ordinals
+- Incompatible change of field types (any type change *not* covered above);
+  e.g.: `int32` to `string`, `string` to `wstring`, `float` to
+  `nullable<float>`
+- Changing of field ordinals/ids
 - Changing of inheritance hierarchy (add/remove/substituting base struct)
 - Changing between `required` and `optional` directly
 - Changing the default value of a field
@@ -332,8 +343,9 @@ These following changes will break wire compatibility and are not recommended:
 
 Some best practices and other considerations to keep in mind:
 
-- When removing a field, comment it out rather than removing it altogether so
-  that the field ordinal is not reused in future edits of the schema
+- When removing a field, comment it out rather than removing it altogether
+  so that the neither the field ordinal nor name are reused in future edits
+  of the schema
 - When working with untagged protocols like
   [SimpleBinaryProtocol](#simple-binary), great care must be taken to ensure
   the same [schema](#runtime-schema) is used when deserializing the payload as
@@ -698,13 +710,11 @@ own custom implementations.
 The `OutputBuffer` class implements the `IOutputStream` interface on top of
 a memory buffer. It comes in two variants.
 [`Bond.IO.Safe.OutputBuffer`](https://github.com/microsoft/bond/blob/master/cs/src/core/io/safe/OutputBuffer.cs)
-uses only safe managed code and is included in the `Bond.dll` assembly which
-is a Portable Class Library.
+uses only safe managed code and is included in the `Bond.dll` assembly.
 [`Bond.IO.Unsafe.OutputBuffer`](https://github.com/microsoft/bond/blob/master/cs/src/io/unsafe/OutputBuffer.cs)
 uses unsafe code to optimize for performance. It is included in the
-`Bond.IO.dll` assembly, which requires a full .NET runtime. Both
-implementations have identical class names and APIs; the only difference is
-the namespace in which they are defined.
+`Bond.IO.dll` assembly. Both implementations have identical class names and
+APIs; the only difference is the namespace in which they are defined.
 
 ```csharp
 // Create an output buffer with initial size of 16KB
@@ -818,17 +828,17 @@ Performance
 Bond offers very fast serialization and deserialization. Here are some tips on
 how to achieve the best performance.
 
-1. Explicitly create instances of `Serializer/Deserializer/Transcoder`
+1. Explicitly create instances of `Serializer`/`Deserializer`/`Transcoder`
 
     Instead of using simplified APIs like `Serialize.To` and
     `Deserialize<T>.From` it is usually better to explicitly instantiate and
-    cache appropriate `Serializer/Deserializer/Transcoder` objects. Creation of
-    these objects involves generation and JIT'ing of specific code to handle
-    the particular operation for a given schema type and protocol(s). This may
-    take a relatively long time, especially for large schemas, and usually it
-    is best to do it during program initialization. Once the object is created
-    it can be reused repeatedly and calling the Serialize/Deserialize/Transcode
-    methods will be very fast.
+    cache appropriate `Serializer`/`Deserializer`/`Transcoder` objects.
+    Creation of these objects involves generation and JIT'ing of specific
+    code to handle the particular operation for a given schema type and
+    protocol(s). This may take a relatively long time, especially for large
+    schemas, and usually it is best to do it during program initialization.
+    Once the object is created it can be reused repeatedly and calling the
+    Serialize/Deserialize/Transcode methods will be very fast.
 
     ```csharp
     var exampleSerializer = new Serializer<CompactBinaryWriter<OutputBuffer>>(typeof(Example));
@@ -845,9 +855,9 @@ how to achieve the best performance.
     var dst = exampleDeserializer.Deserialize<Example>(reader);
     ```
 
-    Note that the type of `Serializer/Deserializer` doesn't depend on the
-    schema type so it is easy to cache these objects for multiple schemas used
-    in an application:
+    Note that the type of `Serializer`/`Deserializer` doesn't depend on the
+    schema type so it is easy to cache these objects for multiple schemas
+    used in an application:
 
     ```csharp
     var serializerCache = new Dictionary<Type, Serializer<CompactBinaryWriter<OutputBuffer>>>
@@ -909,6 +919,20 @@ how to achieve the best performance.
     that the cost of creating the [`Deserializer`](#deserializer) can be
     amortized. The canonical use case for an untagged protocol is record-based
     data storage.
+
+6. Experiment with `inlineNested` when creating
+   `Serializer`/`Deserializer`/`Transcoder` instances
+
+    When a `Serializer`/`Deserializer`/`Transcoder` refers to another Bond
+    struct, by default, the instructions to serialize/deserialize/transcode
+    that type are inlined in the method for the top-level type. This _often_
+    results in better runtime performance. However, it can sometimes cause
+    long JIT'ing times when creating
+    `Serializer`/`Deserializer`/`Transcoder` instances or worse runtime
+    performance. (For example, some optimizations are not performed when
+    methods get large.) You will need to profile and experiment with
+    instances created with `inlineNested` set to `true` (the default) and
+    `false`) to see what is the best fit for your scenario.
 
 Runtime schema
 ==============
@@ -1162,6 +1186,34 @@ collections: `IEnumerable<T>` as well as `ICollection<T>` for aliases of
 type aliases don't require a user defined converter.
 
 - `examples/cs/core/container_alias`
+
+System.Collection.Immutable support
+-----------------------------------
+
+Bond provides special support for using the
+[System.Collections.Immutable](https://learn.microsoft.com/dotnet/api/system.collections.immutable)
+collections as container type aliases. The following aliases are supported:
+
+| Underlying Bond type | Supported System.Collections.Immutable container                                        |
+|----------------------|-----------------------------------------------------------------------------------------|
+| `vector<T>`          | `ImmutableArray<T>`, `ImmutableList<T>`                                                 |
+| `list<T>`            | `ImmutableArray<T>`, `ImmutableHashSet<T>`, `ImmutableList<T>`, `ImmutableSortedSet<T>` |
+| `set<T>`             | `ImmutableHashSet<T>`, `ImmutableSortedSet<T>`                                          |
+| `map<K, V>`          | `ImmutableDictionary<K, V>`, `ImmutableSortedDictionary<K, V>`                          |
+
+During code generation, immutable collection fields are handled specially.
+Since they do not have parameterless constructors, the Bond compiler will
+instead use the static `Empty` field is used as the default value, e.g.
+[ImmutableList\<T\>.Empty](https://learn.microsoft.com/dotnet/api/system.collections.immutable.immutablelist-1.empty).
+
+When deserializing immutable collections, Bond will use the inner `Builder`
+classes to efficiently reconstruct the collection, e.g.
+[ImmutableList\<T\>.Builder](https://learn.microsoft.com/dotnet/api/system.collections.immutable.immutablelist-1.builder).
+
+See the below project for examples on using immutable collections as
+container aliases:
+
+- `examples/cs/core/immutable_collections_alias`
 
 Converter
 ---------
@@ -1653,15 +1705,15 @@ namespace).
 
 This table lists which frameworks are targeted by the Bond assemblies.
 
-This table is accurate for Bond NuGet packages 6.0.0 and later.
+This table is accurate for Bond NuGet packages 11.0 and later.
 
-| Assembly                 | .NET 4.0 | .NET 4.5 | Profile78 | .NET Standard 1.0 | .NET Standard 1.3 | .NET Standard 1.6 |
-|--------------------------|----------|----------|-----------|-------------------|-------------------|-------------------|
-| Bond.Attributes.dll      | No       | Yes      | Yes       | Yes               | ←                 | Yes               |
-| Bond.Reflection.dll      | No       | Yes      | Yes       | Yes               | ←                 | Yes               |
-| Bond.dll                 | No       | Yes      | Yes       | Yes               | ←                 | Yes               |
-| Bond.JSON.dll            | No       | Yes      | No        | Yes               | ←                 | Yes               |
-| Bond.IO.dll              | No       | Win only | No        | No                | Win only          | Win only          |
+| Assembly                 | .NET 4.5 | .NET 4.6.2 | .NET Standard 1.0 | .NET Standard 1.3 | .NET Standard 1.6 |
+|--------------------------|----------|------------|-------------------|-------------------|-------------------|
+| Bond.Attributes.dll      | No       | Yes        | Yes               | ←                 | Yes               |
+| Bond.Reflection.dll      | No       | Yes        | Yes               | ←                 | Yes               |
+| Bond.dll                 | No       | Yes        | Yes               | ←                 | Yes               |
+| Bond.JSON.dll            | No       | Yes        | Yes               | ←                 | Yes               |
+| Bond.IO.dll              | No       | Win only   | No                | Win only          | Win only          |
 
 A left arrow (←) indicates that support for that framework is provided by
 the version of the assembly that targets a lower version of the framework.
@@ -1678,10 +1730,6 @@ References
 [Python User's Manual][bond_py]
 ----------------------------
 
-[Bond-over-gRPC overview][bond_over_grpc]
-----------------------------
-
-[bond_over_grpc]: bond_over_grpc.html
 [bond_cpp]: bond_cpp.html
 [bond_java]: bond_java.html
 [bond_py]: bond_py.html

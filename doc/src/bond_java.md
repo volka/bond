@@ -1,5 +1,15 @@
 % A Thorough Guide to Bond for Java
 
+Bond project has ended
+======================
+
+As of March 2025, the Bond open-source project has ended. There will be no
+further activity in this project: no new features, no bug fixes, and,
+importantly, no security fixes.
+
+The documentation as it existed at the time of the end of the project
+follows.
+
 About
 =====
 
@@ -252,8 +262,9 @@ consideration about how the change is rolled out:
 These following changes will break wire compatibility and are not recommended:
 
 - Adding or removing `required` fields
-- Incompatible change of field types (any type change *not* covered above); e.g.:
-  `int32` to `string`, `string` to `wstring`
+- Incompatible change of field types (any type change *not* covered above);
+  e.g.: `int32` to `string`, `string` to `wstring`, `float` to
+  `nullable<float>`
 - Changing of field ordinals
 - Changing of inheritance hierarchy (add/remove/substituting base struct)
 - Changing between `required` and `optional` directly
@@ -604,9 +615,11 @@ build and install the Bond compiler. Follow the instructions in the top-level
 [README.md](https://github.com/microsoft/bond/blob/master/README.md) to do all
 of this.
 
-Java has two additional requirements:
+Java has additional requirements:
 
-* The Bond compiler, `gbc`, must be in your `PATH`.
+* A Java 8 JDK. A link to download an appropriate OpenJDK 8 is available from https://learn.microsoft.com/en-us/java/openjdk/download.
+
+* The Bond compiler, `gbc`, must be in your `PATH`. `gbc` is produced as part of the C++ build, so you'll need to follow those instructions, and then ensure the resulting binary is on your path:
 
   * Linux, macOS: The `make install` step in the `README` will take care of
     this. If you don't want to install Bond into system directories, you can add
@@ -619,8 +632,11 @@ Java has two additional requirements:
     "%PATH%;<bond repo>\build\compiler\build\gbc"`, where `<bond repo>` is the
     directory you cloned Bond into.
 
-* You need the `gradle` build tool, and should get it from the package manager
-  for your system. Accordingly:
+* `maven`. It may be downloaded from https://maven.apache.org/download.cgi
+
+* The `gradle` build tool. You can download it directly or get it from the package manager
+  for your system. Note that `gradle` has had multiple breaking changes since this was set
+  up; gradle 4.7 from https://gradle.org/releases/ has been validated to work.
 
   * Ubuntu: `sudo apt install gradle`
 
@@ -640,6 +656,12 @@ To build the library and install it to your local maven repository:
 
 ```
 cd java/core; gradle build install
+```
+
+That will also run the tests.  To re-build and re-run the tests:
+
+```
+gradle build install --rerun-tasks
 ```
 
 To consume either component from your local maven repository, see the

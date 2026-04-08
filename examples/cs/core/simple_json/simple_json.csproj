@@ -5,7 +5,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>simple_json</RootNamespace>
     <AssemblyName>simple_json</AssemblyName>
-    <TargetFrameworks>net45</TargetFrameworks>
+    <TargetFrameworks>net462</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
     <!-- Resharper Workaround -->
@@ -13,19 +13,11 @@
     <!-- End Resharper Workaround -->
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Attributes">
-      <HintPath>$(BOND_BINARY_PATH)\net45\Bond.Attributes.dll</HintPath>
-    </Reference>
-    <Reference Include="Bond">
-      <HintPath>$(BOND_BINARY_PATH)\net45\Bond.dll</HintPath>
-    </Reference>
-    <Reference Include="Bond.IO">
-      <HintPath>$(BOND_BINARY_PATH)\net45\Bond.IO.dll</HintPath>
-    </Reference>
-    <Reference Include="Bond.JSON">
-      <HintPath>$(BOND_BINARY_PATH)\net45\Bond.JSON.dll</HintPath>
-    </Reference>
-    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
+    <ProjectReference Include="..\..\..\..\cs\src\attributes\Attributes.csproj" />
+    <ProjectReference Include="..\..\..\..\cs\src\core\Bond.csproj" />
+    <ProjectReference Include="..\..\..\..\cs\src\io\IO.csproj" />
+    <ProjectReference Include="..\..\..\..\cs\src\json\JSON.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
   <Import Project="$(BOND_PATH)\build\nuget\Bond.CSharp.targets" />
 </Project>

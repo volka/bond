@@ -7,10 +7,6 @@
 // Disable warnings in boost::python
 #   pragma warning (push)
 #   pragma warning (disable : 4100 4121 4127 4244 4267 4456 4459 4512)
-
-#   if _MSC_VER < 1800
-#       define HAVE_ROUND
-#   endif
 #endif
 
 #include <boost/python/module.hpp>
@@ -28,6 +24,9 @@
 
 #include <bond/core/blob.h>
 #include <bond/core/nullable.h>
+
+#include <algorithm>
+#include <cctype>
 
 namespace bond
 {
@@ -82,7 +81,11 @@ private:
     void pythonize()
     {
         // TODO: this may result in name conflict, e.g. list<string> and list_string_
-        std::replace_if(_name.begin(), _name.end(), std::not1(std::ptr_fun(isalnum)), '_');
+        std::replace_if(
+            _name.begin(),
+            _name.end(),
+            [](unsigned char c) { return isalnum(c) == 0; },
+            '_');
     }
 
     std::string _name;

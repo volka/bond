@@ -10,6 +10,7 @@
 
 #include <bond/core/bond_version.h>
 #include <bond/core/detail/checked.h>
+#include <bond/core/detail/recursionguard.h>
 #include <bond/core/traits.h>
 #include <bond/stream/output_counter.h>
 
@@ -40,7 +41,7 @@
    field             | id+type  |  value   |
                      '----------'----------'
 
-                                            .---.---.---.---.---.---.---.---.                       i - id bits
+                                            .---.---.---.---.---.---.---.---.                       i - id bits (BE unsigned int)
    id+type           0 <= id <= 5           | i | i | i | t | t | t | t | t |                       t - type bits
                                             '---'---'---'---'---'---'---'---'                       v - value bits
                                               2       0   4               0
@@ -66,12 +67,14 @@
                                             '---'---'---'---'---'---'---'---'
                                               7                           0
 
+                                            signed uses two's complement
+
                                             .---.---.   .---.---.---.   .---.
                      uint16, uint32,        | 1 | v |...| v | 0 | v |...| v |  [...]
                      uint64                 '---'---'   '---'---'---'   '---'
                                                   6       0       13      7
 
-                                            variable encoding, high bit of every byte
+                                            LEB128 variable encoding, high bit of every byte
                                             indicates if there is another byte
 
 
@@ -86,8 +89,10 @@
                                             and then encoded as unsigned integer
 
 
-                     float, double          little endian
+                     float, double          32-bit or 64-bit little endian IEEE 764
 
+
+                     enum                   enum constants are encoded using int32
 
                                             .-------.------------.
                      string, wstring        | count | characters |
@@ -368,6 +373,14 @@ public:
         uint32_t length = 0;
 
         Read(length);
+
+        constexpr uint8_t charSize = static_cast<uint8_t>(sizeof(typename detail::string_char_int_type<T>::type));
+        uint32_t numStringBytes = detail::checked_multiply(length, charSize);
+        if (!_input.CanRead(numStringBytes))
+        {
+            OutOfBoundStringSizeException();
+        }
+
         detail::ReadStringData(_input, value, length);
     }
 
@@ -378,6 +391,28 @@ public:
         _input.Read(value, size);
     }
 
+    // Does the reader have enough input buffer left to read an array of T?
+    template<typename T>
+    bool CanReadArray(uint32_t num_elems)
+    {
+        // Non-float types have variable length encoding going down to 1 Byte.
+        // Strings need 1 Byte per charcter. Wide strings handled below.
+        return _input.CanRead(num_elems);
+    }
+
+    template<typename T>
+    typename boost::enable_if<typename std::is_floating_point<T>::value, bool>::type
+    CanReadArray(uint32_t num_elems)
+    {
+        // We will need to read num_elems instances of T. This will not overflow because
+        // num_elems < 2^32 and we call this only if std::is_floating_point<T>.
+        uint64_t num_bytes = static_cast<uint64_t>(num_elems) * sizeof(T);
+
+        // Check the upper half to ensure we don't try to read more than 4 GB, the
+        // Reader wouldn't be able to handle that. Then ask the Reader if it has enough
+        // data left for our vector.
+        return (num_bytes >> 32 == 0) && _input.CanRead(static_cast<uint32_t>(num_bytes & 0xffffffff));
+    }
 
     template <typename T>
     void Skip()
@@ -397,12 +432,7 @@ public:
     }
 
 protected:
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-    // Using BondDataType directly in non-trivial boolean template checks fails on VC12.
-    using BT = std::underlying_type<BondDataType>::type;
-#else
     using BT = BondDataType;
-#endif
 
     template <BT T>
     typename boost::enable_if_c<(T == BT_BOOL || T == BT_UINT8 || T == BT_INT8)>::type
@@ -461,6 +491,8 @@ protected:
         BondDataType element_type;
         uint32_t     size;
 
+        bond::detail::RecursionGuard guard;
+
         ReadContainerBegin(size, element_type);
         SkipType(element_type, size);
         ReadContainerEnd();
@@ -472,6 +504,8 @@ protected:
     {
         std::pair<BondDataType, BondDataType>   element_type;
         uint32_t                                size;
+
+        bond::detail::RecursionGuard guard;
 
         ReadContainerBegin(size, element_type);
         for (int64_t i = 0; i < size; ++i)
@@ -485,6 +519,8 @@ protected:
     void SkipStructV1()
     {
         BOOST_ASSERT(v1 == _version);
+
+        bond::detail::RecursionGuard guard;
 
         for (;;)
         {
@@ -613,6 +649,7 @@ protected:
                 break;
 
             default:
+                bond::UnknownDataTypeException();
                 break;
         }
     }

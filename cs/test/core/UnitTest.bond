@@ -2,6 +2,7 @@ import "bond/core/bond.bond"
 import "Aliases.bond"
 // Uses mixed slashes to test gbc can deal with that
 import "dir1\dir2/Bond File With Spaces.bond"
+import "ImmutableCollections.bond"
 
 namespace UnitTest
 
@@ -60,6 +61,11 @@ struct FieldOfStructWithAliases
 {
     0: UnitTest.Aliases.BlobAlias b;
     1: DateTime dt;
+}
+
+struct NestedTypes
+{ 
+    0: vector<NestedTypes> a;
 }
 
 struct ContainerOfStructWithAliases

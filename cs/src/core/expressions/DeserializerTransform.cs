@@ -4,11 +4,17 @@
 namespace Bond
 {
     using System;
+    using System.Diagnostics;
+    using System.IO;
+    using System.Linq.Expressions;
+    using System.Reflection;
+    using System.Runtime.CompilerServices;
 
     public struct DeserializerControls
     {
         int maxPreallocatedContainerElements;
         int maxPreallocatedBlobBytes;
+        int maxDepth;
 
         // Default settings
         public readonly static DeserializerControls Default;
@@ -20,6 +26,7 @@ namespace Bond
         {
             Default.MaxPreallocatedContainerElements = 64 * 1024;
             Default.MaxPreallocatedBlobBytes = 64 * 1024 * 1024;
+            Default.MaxDepth = 64;
             Active = Default;
         }
 
@@ -48,6 +55,106 @@ namespace Bond
                 maxPreallocatedBlobBytes = value;
             }
         }
+
+        public int MaxDepth
+        {
+            get { return maxDepth; }
+            set
+            {
+                if (value <= 0)
+                {
+                    throw new ArgumentOutOfRangeException("value", "Value must be positive");
+                }
+                maxDepth = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Provides utility methods for tracking recursion depth and throwing an exception when the
+    /// tracked depth has exceeded DeserializerControls.Active.MaxDepth.
+    /// </summary>
+    internal static class MaxDepthChecker
+    {
+        /// <summary>The depth tracked for the current thread.</summary>
+        /// <remarks>
+        /// This needn't correspond 1:1 with schema structure.  It is an approximate representation of how deeply deserialization
+        /// has recurred, in order to provide a defense-in-depth measure against stack overflows.
+        /// </remarks>
+        [ThreadStatic]
+        static int t_depth;
+
+        /// <summary>A cached Expression for MaxDepthChecker.t_depth.</summary>
+        static readonly Expression s_depthThreadStaticField = Expression.Field(null, typeof(MaxDepthChecker), nameof(t_depth));
+
+        /// <summary>A cached Expression for DeserializerControls.Active.MaxDepth.</summary>
+        static readonly Expression s_maxDepthProperty = Expression.Property(Expression.Field(null, typeof(DeserializerControls), nameof(DeserializerControls.Active)), nameof(DeserializerControls.MaxDepth));
+
+        /// <summary>Cached MethodInfo for the <see cref="ValidateDepthForIncrement"/> method.</summary>
+        static readonly MethodInfo s_validateDepthForIncrement = typeof(MaxDepthChecker).GetTypeInfo().GetDeclaredMethod(nameof(ValidateDepthForIncrement));
+
+        /// <summary>Cached MethodInfo for the <see cref="SetDepth"/> method.</summary>
+        static readonly MethodInfo s_setDepth = typeof(MaxDepthChecker).GetTypeInfo().GetDeclaredMethod(nameof(SetDepth));
+
+        /// <summary>Wraps the supplied expression in a depth check.</summary>
+        public static Expression WithDepthCheck(Expression expression)
+        {
+            // The pattern employed here is designed to handle asynchronous exceptions like thread aborts,
+            // such that no matter where a thread abort occurs (assuming non-rude thread aborts that are delayed
+            // over finally blocks), the depth will always be left on exit as it was on entrance.
+            //
+            // int depth = ValidateDepthForIncrement();
+            // try
+            // {
+            //     MaxDepthChecker.SetDepth(depth + 1);
+            //     expression;
+            // }
+            // finally
+            // {
+            //     MaxDepthChecker.SetDepth(depth);
+            // }
+
+            ParameterExpression depth = Expression.Variable(typeof(int), "depth");
+
+            return Expression.Block(
+                new[] { depth },
+                Expression.Assign(depth, Expression.Call(s_validateDepthForIncrement)),
+                Expression.TryFinally(
+                    Expression.Block(
+                        Expression.Call(s_setDepth, Expression.Increment(depth)),
+                        expression),
+                    Expression.Call(s_setDepth, depth)));
+        }
+
+        /// <summary>Validates the current depth against the limit, assuming it's about to be incremented, and returns it.</summary>
+        /// <exception cref="InvalidDataException">Recursion depth exceeded DeserializerControls.MaxDepth.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int ValidateDepthForIncrement()
+        {
+            int depth = t_depth;
+            Debug.Assert(depth >= 0);
+
+            // Check with >= rather than > as we're validating depth+1.
+            if (depth >= DeserializerControls.Active.MaxDepth)
+            {
+                ThrowTooDeepException();
+            }
+
+            return depth;
+        }
+
+        /// <summary>Sets the tracked depth.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void SetDepth(int depth)
+        {
+            Debug.Assert(depth >= 0 && depth <= DeserializerControls.Active.MaxDepth);
+            t_depth = depth;
+        }
+
+        /// <summary>Undoes an increment to the current depth and throws an exception indicating max depth exceeded.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowTooDeepException() =>
+            throw new InvalidDataException($"Recursion depth exceeded {nameof(DeserializerControls)}.{nameof(DeserializerControls.MaxDepth)}");
     }
 }
 
@@ -82,6 +189,25 @@ namespace Bond.Expressions
             typeof(ArraySegment<byte>).GetConstructor(typeof(byte[]), typeof(int), typeof(int));
         static readonly MethodInfo bufferBlockCopy =
             Reflection.MethodInfoOf((byte[] a) => Buffer.BlockCopy(a, default(int), a, default(int), default(int)));
+
+        // Immutable collection types are represented/identified as strings
+        // to avoid depending on the System.Collections.Immutable assembly
+        // or NuGet package
+        static readonly HashSet<string> immutableListSetTypeNames = new HashSet<string>
+        {
+            "System.Collections.Immutable.ImmutableArray`1",
+            "System.Collections.Immutable.ImmutableList`1",
+            "System.Collections.Immutable.ImmutableHashSet`1",
+            "System.Collections.Immutable.ImmutableSortedSet`1",
+        };
+
+        static readonly HashSet<string> immutableMapTypeNames = new HashSet<string>
+        {
+            "System.Collections.Immutable.ImmutableDictionary`2",
+            "System.Collections.Immutable.ImmutableSortedDictionary`2",
+        };
+
+        static readonly HashSet<string> immutableCollectionTypeNames = new HashSet<string>(immutableListSetTypeNames.Concat(immutableMapTypeNames));
 
         public DeserializerTransform(
             Expression<Func<R, int, object>> deferredDeserialize,
@@ -397,7 +523,7 @@ namespace Bond.Expressions
                         else
                         {
                             var capacity = container.Type.GetDeclaredProperty("Capacity", count.Type);
-                            if (capacity != null)
+                            if (capacity != null && capacity.CanWrite)
                             {
                                 var cappedCount = Expression.Variable(typeof(int), container + "_count");
                                 beforeLoop = ApplyCountCap(
@@ -408,20 +534,44 @@ namespace Bond.Expressions
                             }
                         }
 
-                        var add = container.Type.GetMethod(typeof(ICollection<>), "Add", item.Type);
+                        // For System.Collections.Immutable lists/sets, use the builders to construct them, since ICollection<T>.Add()
+                        // is not supported for them.
+                        var containerGenericTypeDef = container.Type.GetGenericTypeDefinition();
+                        if (immutableListSetTypeNames.Contains(containerGenericTypeDef.FullName))
+                        {
+                            var builderType = container.Type.GetTypeInfo().GetDeclaredNestedType("Builder").MakeGenericType(item.Type);
+                            var builder = Expression.Variable(builderType, container + "_builder");
+                            var builderAdd = builderType.GetMethod(typeof(ICollection<>), "Add", item.Type);
 
-                        addItem = Expression.Block(
-                            Value(valueParser, item, elementType, itemSchemaType, initialize: true),
-                            Expression.Call(container, add, item));
+                            addItem = Expression.Block(
+                                Value(valueParser, item, elementType, itemSchemaType, initialize: true),
+                                Expression.Call(builder, builderAdd, item));
 
-                        parameters = new[] { item };
+                            var toBuilderMethod = container.Type.FindMethod("ToBuilder");
+                            var toImmutableMethod = builderType.FindMethod("ToImmutable");
+                            var constructBuilder = Expression.Assign(builder, Expression.Call(container, toBuilderMethod));
+                            var reconstructImmutable = Expression.Assign(container, Expression.Call(builder, toImmutableMethod));
+
+                            parameters = new[] { item, builder };
+                            beforeLoop = Expression.Block(beforeLoop, constructBuilder);
+                            afterLoop = Expression.Block(afterLoop, reconstructImmutable);
+                        }
+                        else
+                        {
+                            var add = container.Type.GetMethod(typeof(ICollection<>), "Add", item.Type);
+
+                            addItem = Expression.Block(
+                                Value(valueParser, item, elementType, itemSchemaType, initialize: true),
+                                Expression.Call(container, add, item));
+
+                            parameters = new[] { item };
+                        }
                     }
 
                     return Expression.Block(
                         parameters,
                         beforeLoop,
-                        ControlExpression.While(next,
-                            addItem),
+                        ControlExpression.While(next, addItem),
                         afterLoop);
                 });
         }
@@ -451,19 +601,48 @@ namespace Bond.Expressions
                             Expression.Assign(map, newContainer(map.Type, schemaType, cappedCount)));
                     }
 
-                    var add = map.Type.GetDeclaredProperty(typeof(IDictionary<,>), "Item", value.Type);
+                    // For System.Collections.Immutable maps, use the builders to construct them, since
+                    // the setter IDictionary<K,V>.Item[] is not supported for them.
+                    var mapGenericTypeDef = map.Type.GetGenericTypeDefinition();
+                    if (immutableMapTypeNames.Contains(mapGenericTypeDef.FullName))
+                    {
+                        var builderType = map.Type.GetTypeInfo().GetDeclaredNestedType("Builder").MakeGenericType(itemSchemaType.Key, itemSchemaType.Value);
+                        var builder = Expression.Variable(builderType, map + "_builder");
+                        var builderAdd = builderType.GetDeclaredProperty(typeof(IDictionary<,>), "Item", value.Type);
 
-                    Expression addItem = Expression.Block(
-                        Value(keyParser, key, keyType, itemSchemaType.Key, initialize: true),
-                        nextValue,
-                        Value(valueParser, value, valueType, itemSchemaType.Value, initialize: true),
-                        Expression.Assign(Expression.Property(map, add, new Expression[] { key }), value));
+                        var addItem = Expression.Block(
+                            Value(keyParser, key, keyType, itemSchemaType.Key, initialize: true),
+                            nextValue,
+                            Value(valueParser, value, valueType, itemSchemaType.Value, initialize: true),
+                            Expression.Assign(Expression.Property(builder, builderAdd, new Expression[] { key }), value));
 
-                    return Expression.Block(
-                        new [] { key, value },
-                        init,
-                        ControlExpression.While(nextKey,
-                            addItem));
+                        var toBuilderMethod = map.Type.FindMethod("ToBuilder");
+                        var toImmutableMethod = builderType.FindMethod("ToImmutable");
+                        var constructBuilder = Expression.Assign(builder, Expression.Call(map, toBuilderMethod));
+                        var reconstructImmutable = Expression.Assign(map, Expression.Call(builder, toImmutableMethod));
+
+                        return Expression.Block(
+                            new[] { key, value, builder },
+                            init,
+                            constructBuilder,
+                            ControlExpression.While(nextKey, addItem),
+                            reconstructImmutable);
+                    }
+                    else
+                    {
+                        var add = map.Type.GetDeclaredProperty(typeof(IDictionary<,>), "Item", value.Type);
+
+                        var addItem = Expression.Block(
+                            Value(keyParser, key, keyType, itemSchemaType.Key, initialize: true),
+                            nextValue,
+                            Value(valueParser, value, valueType, itemSchemaType.Value, initialize: true),
+                            Expression.Assign(Expression.Property(map, add, new Expression[] { key }), value));
+
+                        return Expression.Block(
+                            new[] { key, value },
+                            init,
+                            ControlExpression.While(nextKey, addItem));
+                    }
                 });
         }
 
@@ -558,7 +737,15 @@ namespace Bond.Expressions
             }
             else if (schemaType.IsGenericType())
             {
-                schemaType = schemaType.GetGenericTypeDefinition().MakeGenericType(type.GetTypeInfo().GenericTypeArguments);
+                // All System.Collections.Immutable collections have a static field ImmutableX<T>.Empty
+                // which is the simplest constructor.
+                var schemaGenericTypeDef = schemaType.GetGenericTypeDefinition();
+                if (immutableCollectionTypeNames.Contains(schemaGenericTypeDef.FullName))
+                {
+                    return Expression.Field(null, schemaType.GetTypeInfo().GetDeclaredField("Empty"));
+                }
+
+                schemaType = schemaGenericTypeDef.MakeGenericType(type.GetTypeInfo().GenericTypeArguments);
             }
             else if (schemaType.IsArray)
             {

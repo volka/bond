@@ -53,7 +53,7 @@ struct CoreException
 };
 
 
-BOND_NORETURN inline void MergerContainerException(uint32_t payload, uint32_t obj)
+[[noreturn]] inline void MergerContainerException(uint32_t payload, uint32_t obj)
 {
     BOND_THROW(CoreException,
           "Merge failed: container mismatch, length in the payload: "
@@ -61,17 +61,40 @@ BOND_NORETURN inline void MergerContainerException(uint32_t payload, uint32_t ob
 }
 
 
-BOND_NORETURN inline void InvalidKeyTypeException()
+[[noreturn]] inline void InvalidKeyTypeException()
 {
     BOND_THROW(CoreException,
         "Map key type not valid");
 }
 
+[[noreturn]] inline void UnknownDataTypeException()
+{
+    BOND_THROW(CoreException,
+        "Unknown data type found");
+}
+
+[[noreturn]] inline void ExceededMaxRecursionDepthException()
+{
+    BOND_THROW(CoreException,
+        "Max recursion depth exceeded");
+}
+
+[[noreturn]] inline void OutOfBoundObjectSizeException()
+{
+    BOND_THROW(CoreException,
+        "Payload had an element size larger than the input buffer");
+}
+
+[[noreturn]] inline void OutOfBoundStringSizeException()
+{
+    BOND_THROW(CoreException,
+        "Payload-specified string length exceeds the input buffer size");
+}
 
 namespace detail
 {
     template <typename Key>
-    BOND_NORETURN inline void ElementNotFoundExceptionHelper(
+    [[noreturn]] inline void ElementNotFoundExceptionHelper(
         const Key& key,
         typename boost::enable_if<is_wstring<Key>>::type* = nullptr)
     {
@@ -91,7 +114,7 @@ namespace detail
     }
 
     template <typename Key>
-    BOND_NORETURN inline void ElementNotFoundExceptionHelper(
+    [[noreturn]] inline void ElementNotFoundExceptionHelper(
         const Key& key,
         typename boost::disable_if<is_wstring<Key>>::type* = nullptr)
     {
@@ -102,20 +125,20 @@ namespace detail
 
 
 template <typename Key>
-BOND_NORETURN inline void ElementNotFoundException(const Key& key)
+[[noreturn]] inline void ElementNotFoundException(const Key& key)
 {
     detail::ElementNotFoundExceptionHelper(key);
 }
 
 
-BOND_NORETURN inline void UnknownProtocolException()
+[[noreturn]] inline void UnknownProtocolException()
 {
     BOND_THROW(CoreException,
           "Unmarshaling failed: unsupported protocol");
 }
 
 
-BOND_NORETURN inline void UnknownProtocolException(uint16_t magic)
+[[noreturn]] inline void UnknownProtocolException(uint16_t magic)
 {
     BOND_THROW(CoreException,
           "Unsupported protocol: "
@@ -123,35 +146,35 @@ BOND_NORETURN inline void UnknownProtocolException(uint16_t magic)
 }
 
 
-BOND_NORETURN inline void NothingException()
+[[noreturn]] inline void NothingException()
 {
     BOND_THROW(CoreException,
           "Field value is 'nothing'");
 }
 
 
-BOND_NORETURN inline void InvalidEnumValueException(const char* value, const char* enum_)
+[[noreturn]] inline void InvalidEnumValueException(const char* value, const char* enum_)
 {
     BOND_THROW(bond::CoreException,
         "Unexpected value " << value << " for enum " << enum_);
 }
 
 
-BOND_NORETURN inline void InvalidEnumValueException(int32_t value, const char* enum_)
+[[noreturn]] inline void InvalidEnumValueException(int32_t value, const char* enum_)
 {
     BOND_THROW(bond::CoreException,
         "Unexpected value " << value << " for enum " << enum_);
 }
 
 
-BOND_NORETURN inline void RapidJsonException(const char* error, size_t offset)
+[[noreturn]] inline void RapidJsonException(const char* error, size_t offset)
 {
     BOND_THROW(CoreException,
         "JSON parser error: " << error << " at offset " << offset);
 }
 
 
-BOND_NORETURN inline void UnicodeConversionException()
+[[noreturn]] inline void UnicodeConversionException()
 {
     BOND_THROW(CoreException,
         "Unicode conversion exception");
@@ -176,7 +199,7 @@ struct SchemaValidateException
 };
 
 
-BOND_NORETURN
+[[noreturn]]
 inline void StructBaseDifferentException(const StructDef& src,
                                          const StructDef& dst)
 {
@@ -186,7 +209,7 @@ inline void StructBaseDifferentException(const StructDef& src,
 }
 
 
-BOND_NORETURN
+[[noreturn]]
 inline void RequiredFieldMissingException(const StructDef& s_dst,
                                           const FieldDef& f_dst)
 {
@@ -196,7 +219,7 @@ inline void RequiredFieldMissingException(const StructDef& s_dst,
 }
 
 
-BOND_NORETURN
+[[noreturn]]
 inline void OptionalToRequiredException(const StructDef& s_src,
                                         const StructDef& s_dst,
                                         const FieldDef& f_src,
@@ -209,7 +232,7 @@ inline void OptionalToRequiredException(const StructDef& s_src,
 }
 
 
-BOND_NORETURN
+[[noreturn]]
 inline void FieldTypeIncompatibleException(const StructDef& s_src,
                                            const StructDef& s_dst,
                                            const FieldDef& f_src,
@@ -222,7 +245,7 @@ inline void FieldTypeIncompatibleException(const StructDef& s_src,
 }
 
 
-BOND_NORETURN inline void UnknownSchemaDefException(uint16_t id)
+[[noreturn]] inline void UnknownSchemaDefException(uint16_t id)
 {
     BOND_THROW(SchemaValidateException,
         "Failed to validate schema compatibility; "

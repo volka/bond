@@ -32,7 +32,6 @@ function (add_stack_build target)
     list (APPEND options $<$<CONFIG:MinSizeRel>:--executable-stripping>)
     list (APPEND options $<$<CONFIG:MinSizeRel>:--ghc-options=-O2>)
     list (APPEND options $<$<CONFIG:MinSizeRel>:--library-stripping>)
-    list (APPEND options $<$<CONFIG:MinSizeRel>:--split-objs>)
 
     list (APPEND options $<$<CONFIG:Release>:--executable-stripping>)
     list (APPEND options $<$<CONFIG:Release>:--ghc-options=-O2>)
@@ -129,7 +128,7 @@ if(NOT BOND_SKIP_GBC_TESTS)
 endif()
 
 install (FILES ${output}
-    PERMISSIONS OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
+    PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
     DESTINATION bin)
 
 install (FILES ${completion}

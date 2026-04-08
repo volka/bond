@@ -50,20 +50,6 @@ is_protocol_enabled<FastBinaryReader<Buffer> >
     : std::true_type {};
 #endif
 
-// uses_static_parser
-template <typename Reader, typename Enable = void> struct
-uses_static_parser
-    : std::false_type {};
-
-template <typename Reader> struct
-uses_static_parser<Reader, typename boost::enable_if<
-    std::is_same<typename Reader::Parser, StaticParser<Reader&> > >::type>
-    : std::true_type {};
-
-template <typename Reader> struct
-uses_static_parser<Reader&>
-    : uses_static_parser<Reader> {};
-
 // uses_dynamic_parser
 template <typename Reader, typename Enable = void> struct
 uses_dynamic_parser
@@ -192,12 +178,19 @@ BOND_DEFINE_BUFFER_MAGIC(ValueReader::Buffer, 0);
 
 namespace detail
 {
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4296) // C4296: '<' : expression is always false
+#endif // _MSC_VER
 
     // Avoid std::max due to a bug in Visual C++ 2017.
     template <std::size_t V0, std::size_t V1>
     struct max_of
         : std::integral_constant<std::size_t, (V0 < V1 ? V1 : V0)> {};
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif // _MSC_VER
 
     template <typename List> struct
     max_size;
@@ -212,12 +205,6 @@ namespace detail
 
     using protocol_max_size = max_size<BuiltInProtocols::Append<ValueReader>::type>;
 
-#else // !defined(_MSC_VER) || _MSC_VER >= 1900
-
-    // Use hard-coded 128 byte storage on VC12 as a compiler crash workaround.
-    using protocol_max_size = std::integral_constant<std::size_t, 128>;
-
-#endif
 } // namespace detail
 
 
